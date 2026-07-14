@@ -35,6 +35,12 @@ cd src\CMS.NG; npm test               # Karma + Jasmine (needs CHROME_BIN for he
 `ng test` headless: `$env:CHROME_BIN = "C:\Program Files\Google\Chrome\Application\chrome.exe"`
 then `npx ng test --watch=false --browsers=ChromeHeadless`.
 
+**Stop the API before `dotnet test`.** A running `dotnet run` holds a lock on
+`src\CMS.API\bin\Debug\net9.0\CMS.API.dll`, and the test project rebuilds the API into that same
+folder — so the build dies with `MSB3021 ... being used by another process` and the failure looks
+nothing like a compile error. `Get-Process CMS.API | Stop-Process -Force` first. To type-check the
+API *without* stopping it, build to a throwaway folder: `dotnet build src\CMS.API --output <tmp>`.
+
 ## Architecture
 
 **Backend.** Per table: `Models/{Table}.cs` (response, with nav objects / subquery counts),
@@ -72,9 +78,33 @@ directly, and the API's CORS policy allows any localhost origin.
   - Route is `{id:int}` — ASP.NET has no `:byte` constraint — and the controller range-checks 0–255
     before casting, so `/api/publish-statuses/999` is a clean 404 rather than a 500.
   - The form makes `pkid` editable on add and `disable()`s it on edit (same as `AppRole.RoleId`).
+- **…and not every IDENTITY is an `int`.** `Partner.pkid` and `CourseGroup.pkid` are `smallint
+  IDENTITY` → C# `short`. Check the column type, not just whether it says IDENTITY:
+  - `SELECT CAST(SCOPE_IDENTITY() AS smallint)` and `ExecuteScalarAsync<short>`, not `int`.
+  - Route stays `{id:int}` (ASP.NET has no `:short` constraint) and the controller range-checks
+    against `short.MinValue`/`short.MaxValue` before casting, so `/api/partners/99999` is a clean 404
+    rather than an overflow. Same shape as `PublishStatusesController.TryToPkid`.
+  - The pkid is DB-generated, so the form has **no `pkid` control at all** — unknown on add, immutable
+    on edit. This is the opposite of `PublishStatus`, whose form *does* expose it. Don't pattern-match
+    the wrong reference.
 - **Deletes that would orphan children return 409**, not a FK exception — check the child count first.
   Prefer a correlated-subquery count on the response model (`PublishStatus.CourseCount`) and read the
   guard off the entity the controller already loaded for its 404 — no second round trip.
+  - A parent can have *several* child tables (`Partner` has five). Count them all, and have the 409
+    message name only the ones that actually have rows — see `PartnersController.DescribeBlockers`.
+  - **Guard on what would be orphaned, not on what SQL Server would reject.** `Seminar.Partner_pkid`
+    points at `Partner` but the schema declares **no FK constraint** for it, so a delete would silently
+    orphan those rows. `SeminarCount` is in the guard anyway. Grep for `{Table}_pkid` columns, not just
+    for `FOREIGN KEY` clauses.
+- **Don't invent constraints the schema doesn't have.** `Partner.AppKey` reads like a natural key, but
+  there is no UNIQUE index on it — only `PK_Partner` on `pkid` — so the API adds **no** duplicate-AppKey
+  409, and `AppKey` is freely editable. Contrast `AppRole.RoleId`, which really is a clustered PK and
+  therefore really does get a 409 and an immutable field. Read the constraints before assuming.
+- **Two FK columns don't make a junction table.** `PartnerCourseGroup` looks like a Partner ↔ CourseGroup
+  N-N, but it also carries `DisplayOrder` and `Description nvarchar(100) NOT NULL`. A `p-multiselect`
+  emits only a list of ids, so the delete-then-reinsert sync could never supply `Description` and every
+  INSERT would fail. It is a child entity needing its own CRUD, not an N-N picker. Check for payload
+  columns before scaffolding an N-N.
 - **`nchar(n)` columns need `RTRIM()`** in every SELECT (see the convention).
 - **RowAudit is not wired up.** The `RowAudit` table exists in `admin.sql`, and the sample specs and
   the `/crud` skill both reference a `RowAuditWriter` / `RowAuditBadgeComponent` / `AuditHelper` —
@@ -84,8 +114,10 @@ directly, and the API's CORS policy allows any localhost origin.
   `core/services/`; there is no `core/` directory. Models and services live in
   `features/{table-plural}/`, next to the components. Follow the existing code, not the skill text.
 - **A few tables are scripted into more than one `.sql` file.** `PublishStatus` appears identically in
-  `admin.sql`, `course.sql`, and `promotion.sql`. Same table, one deployed copy — diff them before
-  assuming which file is authoritative.
+  `admin.sql`, `course.sql`, and `promotion.sql`; `Partner` and `PartnerCourseGroup` appear in both
+  `course.sql` and `promotion.sql`. Same table, one deployed copy — diff them before assuming which
+  file is authoritative. Note the FK constraints may be declared in only *one* of the copies, so grep
+  every file when hunting for a table's children.
 - **New repositories must be swapped in `CmsApiFactory`.** It removes each `I{Table}Repository` and
   registers an in-memory fake. Miss one and the test host resolves the real Dapper repository, and
   those tests will try to reach SQL Server.
@@ -100,8 +132,18 @@ directly, and the API's CORS policy allows any localhost origin.
 
 ## Adding a feature
 
-Built so far: **AppRole** (`/api/app-roles`) and **PublishStatus** (`/api/publish-statuses`). Use
-those as the reference implementation — the sample specs describe a richer system than what exists.
+Built so far: **AppRole** (`/api/app-roles`), **PublishStatus** (`/api/publish-statuses`),
+**Partner** (`/api/partners`) and **CourseGroup** (`/api/course-groups`). Use those as the reference
+implementation — the sample specs describe a richer system than what exists. Pick the one whose PK
+matches the table you're adding:
+
+| Reference | PK shape | Copy it when… |
+|-----------|----------|---------------|
+| `AppRole` | `int` IDENTITY + a separate immutable natural key | the table has a business key other tables FK to |
+| `PublishStatus` | `tinyint`, **no** IDENTITY | the *user* supplies the key |
+| `Partner` | `smallint` IDENTITY | the DB generates the key (the common case) |
+
+`Partner` is also the reference for a multi-child delete guard and for a table with no outbound FKs.
 
 1. Read the table in `database/*.sql` and write a spec from `spec/feature-spec.template.md`,
    saved to `spec/{sub-system}/{Table}.md`. Check whether `pkid` is really an IDENTITY.

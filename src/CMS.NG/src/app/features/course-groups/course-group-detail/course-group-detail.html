@@ -1,0 +1,41 @@
+<div class="page-toolbar">
+  <div class="page-title">
+    <h1>檢視課程群組</h1>
+    @if (group()) {
+      <span class="page-subtitle">{{ group()!.description }}</span>
+    }
+  </div>
+
+  <div class="page-actions">
+    <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" routerLink="/course-groups" />
+    <p-button label="編輯" icon="pi pi-pencil" (onClick)="edit()" [disabled]="!group()" />
+  </div>
+</div>
+
+@if (group(); as g) {
+  <div class="card">
+    <h2 class="card-title">課程群組資料</h2>
+
+    <dl class="detail-grid">
+      <dt>主代碼</dt>
+      <dd>{{ g.pkid }}</dd>
+
+      <dt>群組說明</dt>
+      <dd>{{ g.description }}</dd>
+
+      <dt>課程數</dt>
+      <dd>{{ g.courseCount }}</dd>
+
+      <dt>夥伴課程群組數</dt>
+      <dd>{{ g.partnerCourseGroupCount }}</dd>
+    </dl>
+
+    @if (g.courseCount > 0 || g.partnerCourseGroupCount > 0) {
+      <p class="usage-note">
+        此課程群組仍被 {{ g.courseCount }} 筆課程、{{ g.partnerCourseGroupCount }} 筆夥伴課程群組引用，無法刪除。
+      </p>
+    }
+  </div>
+} @else if (loading()) {
+  <div class="card">載入中…</div>
+}

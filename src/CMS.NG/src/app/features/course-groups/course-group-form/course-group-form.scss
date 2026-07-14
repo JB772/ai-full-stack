@@ -1,0 +1,19 @@
+.field-hint {
+  display: block;
+  color: var(--p-text-muted-color);
+  font-size: 0.78rem;
+  margin-top: 0.25rem;
+}
+
+.field-readonly {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: var(--p-content-border-radius);
+  background: var(--p-content-background);
+  color: var(--p-text-muted-color);
+}
+
+:host ::ng-deep .w-full,
+:host ::ng-deep .w-full input {
+  width: 100%;
+}

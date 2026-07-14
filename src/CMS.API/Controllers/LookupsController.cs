@@ -9,7 +9,9 @@ namespace CMS.API.Controllers;
 [Produces("application/json")]
 public class LookupsController(
     IAppRoleRepository appRoleRepository,
-    IPublishStatusRepository publishStatusRepository) : ControllerBase
+    IPublishStatusRepository publishStatusRepository,
+    IPartnerRepository partnerRepository,
+    ICourseGroupRepository courseGroupRepository) : ControllerBase
 {
     /// <summary>角色下拉選單資料。</summary>
     [HttpGet("app-roles")]
@@ -22,4 +24,16 @@ public class LookupsController(
     [ProducesResponseType(typeof(IEnumerable<PublishStatus>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<PublishStatus>>> GetPublishStatuses()
         => Ok(await publishStatusRepository.GetAllAsync());
+
+    /// <summary>合作夥伴下拉選單資料 (依顯示順序排序，顯示 Name)。</summary>
+    [HttpGet("partners")]
+    [ProducesResponseType(typeof(IEnumerable<Partner>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<Partner>>> GetPartners()
+        => Ok(await partnerRepository.GetAllAsync());
+
+    /// <summary>課程群組下拉選單資料 (依群組說明排序，顯示 Description)。</summary>
+    [HttpGet("course-groups")]
+    [ProducesResponseType(typeof(IEnumerable<CourseGroup>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<CourseGroup>>> GetCourseGroups()
+        => Ok(await courseGroupRepository.GetAllAsync());
 }

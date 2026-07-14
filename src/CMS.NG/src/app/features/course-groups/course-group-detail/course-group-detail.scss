@@ -1,0 +1,21 @@
+.detail-grid {
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  gap: 0.75rem 1rem;
+  margin: 0;
+
+  dt {
+    font-weight: 600;
+    color: var(--p-text-muted-color);
+  }
+
+  dd {
+    margin: 0;
+  }
+}
+
+.usage-note {
+  margin: 1.25rem 0 0;
+  color: var(--p-text-muted-color);
+  font-size: 0.85rem;
+}

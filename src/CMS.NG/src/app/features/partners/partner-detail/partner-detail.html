@@ -1,0 +1,77 @@
+<div class="page-toolbar">
+  <div class="page-title">
+    <h1>檢視合作夥伴</h1>
+    @if (partner()) {
+      <span class="page-subtitle">{{ partner()!.name }}</span>
+    }
+  </div>
+
+  <div class="page-actions">
+    <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" routerLink="/partners" />
+    <p-button label="編輯" icon="pi pi-pencil" (onClick)="edit()" [disabled]="!partner()" />
+  </div>
+</div>
+
+@if (partner(); as p) {
+  <div class="card">
+    <h2 class="card-title">合作夥伴資料</h2>
+
+    <dl class="detail-grid">
+      <dt>主代碼</dt>
+      <dd>{{ p.pkid }}</dd>
+
+      <dt>名稱</dt>
+      <dd>{{ p.name }}</dd>
+
+      <dt>應用代碼</dt>
+      <dd>{{ p.appKey }}</dd>
+
+      <dt>夥伴選單顯示名稱</dt>
+      <dd>{{ p.nameOnPartnerMenu }}</dd>
+
+      <dt>課程明細頁顯示名稱</dt>
+      <dd>{{ p.nameOnCourseDetailPage }}</dd>
+
+      <dt>顯示順序</dt>
+      <dd>{{ p.displayOrder }}</dd>
+
+      <dt>圖片檔名</dt>
+      <dd>
+        @if (p.imageFilename) {
+          {{ p.imageFilename }}
+        } @else {
+          <span class="text-muted">—</span>
+        }
+      </dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">關聯資料</h2>
+
+    <dl class="detail-grid">
+      <dt>課程數</dt>
+      <dd>{{ p.courseCount }}</dd>
+
+      <dt>認證數</dt>
+      <dd>{{ p.certificationCount }}</dd>
+
+      <dt>課程群組數</dt>
+      <dd>{{ p.courseGroupCount }}</dd>
+
+      <dt>促銷活動數</dt>
+      <dd>{{ p.promotionCount }}</dd>
+
+      <dt>研討會數</dt>
+      <dd>{{ p.seminarCount }}</dd>
+    </dl>
+
+    @if (referenceCount() > 0) {
+      <p class="usage-note">
+        此合作夥伴仍被 {{ referenceCount() }} 筆資料引用，無法刪除。
+      </p>
+    }
+  </div>
+} @else if (loading()) {
+  <div class="card">載入中…</div>
+}

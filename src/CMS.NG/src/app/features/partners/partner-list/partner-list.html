@@ -1,0 +1,154 @@
+<div class="page-toolbar">
+  <div class="page-title">
+    <h1>合作夥伴 Partner</h1>
+    <span class="page-subtitle">課程的合作夥伴／原廠</span>
+  </div>
+
+  <div class="page-actions">
+    <p-button
+      label="搜尋條件"
+      icon="pi pi-filter"
+      severity="secondary"
+      [badge]="hasActiveFilters ? '!' : undefined"
+      (onClick)="filterDrawerVisible.set(true)" />
+    <p-button label="新增" icon="pi pi-plus" severity="success" routerLink="/partners/new" />
+  </div>
+</div>
+
+<div class="card">
+  <p-table
+    [value]="partners()"
+    [loading]="loading()"
+    [paginator]="true"
+    [rows]="rows"
+    [first]="first"
+    [rowsPerPageOptions]="[10, 20, 50, 100]"
+    [sortField]="sortField"
+    [sortOrder]="sortOrder"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="{first}–{last} 筆，共 {totalRecords} 筆"
+    paginatorPosition="top"
+    dataKey="pkid"
+    styleClass="p-datatable-sm p-datatable-gridlines"
+    (onSort)="onSort($event)"
+    (onPage)="onPage($event)">
+
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="pkid" style="width: 6rem">主代碼 <p-sortIcon field="pkid" /></th>
+        <th pSortableColumn="name">名稱 <p-sortIcon field="name" /></th>
+        <th pSortableColumn="appKey" style="width: 8rem">應用代碼 <p-sortIcon field="appKey" /></th>
+        <th pSortableColumn="nameOnPartnerMenu">夥伴選單顯示名稱 <p-sortIcon field="nameOnPartnerMenu" /></th>
+        <th pSortableColumn="displayOrder" style="width: 7rem">顯示順序 <p-sortIcon field="displayOrder" /></th>
+        <th pSortableColumn="imageFilename" style="width: 10rem">圖片檔名 <p-sortIcon field="imageFilename" /></th>
+        <th pSortableColumn="courseCount" style="width: 7rem">課程數 <p-sortIcon field="courseCount" /></th>
+        <th pSortableColumn="certificationCount" style="width: 7rem">認證數 <p-sortIcon field="certificationCount" /></th>
+        <th style="width: 9rem">操作</th>
+      </tr>
+    </ng-template>
+
+    <ng-template #body let-partner>
+      <tr>
+        <td>{{ partner.pkid }}</td>
+        <td>{{ partner.name }}</td>
+        <td>{{ partner.appKey }}</td>
+        <td>{{ partner.nameOnPartnerMenu }}</td>
+        <td class="text-right">{{ partner.displayOrder }}</td>
+        <td>
+          @if (partner.imageFilename) {
+            {{ partner.imageFilename }}
+          } @else {
+            <span class="text-muted">—</span>
+          }
+        </td>
+        <td class="text-right">{{ partner.courseCount }}</td>
+        <td class="text-right">{{ partner.certificationCount }}</td>
+        <td>
+          <div class="row-actions">
+            <p-button
+              icon="pi pi-eye"
+              severity="secondary"
+              [text]="true"
+              pTooltip="檢視"
+              [attr.aria-label]="'檢視 ' + partner.name"
+              (onClick)="view(partner)" />
+            <p-button
+              icon="pi pi-pencil"
+              severity="info"
+              [text]="true"
+              pTooltip="編輯"
+              [attr.aria-label]="'編輯 ' + partner.name"
+              (onClick)="edit(partner)" />
+            <p-button
+              icon="pi pi-trash"
+              severity="danger"
+              [text]="true"
+              pTooltip="刪除"
+              [attr.aria-label]="'刪除 ' + partner.name"
+              (onClick)="confirmDelete(partner)" />
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="9" class="empty-row">查無資料</td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>
+
+<p-drawer
+  [visible]="filterDrawerVisible()"
+  (visibleChange)="filterDrawerVisible.set($event)"
+  header="搜尋條件"
+  position="right"
+  [style]="{ width: '22rem' }">
+
+  <div class="field">
+    <label for="filter-keyword">關鍵字</label>
+    <input
+      id="filter-keyword"
+      pInputText
+      class="w-full"
+      placeholder="名稱、應用代碼、顯示名稱"
+      [(ngModel)]="filters.keyword"
+      (keyup.enter)="applyFilters()" />
+  </div>
+
+  <div class="field">
+    <label for="filter-display-order-from">顯示順序 (起)</label>
+    <p-inputnumber
+      inputId="filter-display-order-from"
+      styleClass="w-full"
+      [min]="0"
+      [(ngModel)]="filters.displayOrderFrom" />
+  </div>
+
+  <div class="field">
+    <label for="filter-display-order-to">顯示順序 (迄)</label>
+    <p-inputnumber
+      inputId="filter-display-order-to"
+      styleClass="w-full"
+      [min]="0"
+      [(ngModel)]="filters.displayOrderTo" />
+  </div>
+
+  <div class="field">
+    <label for="filter-has-image">有圖片</label>
+    <p-select
+      inputId="filter-has-image"
+      styleClass="w-full"
+      appendTo="body"
+      [options]="triStateOptions"
+      optionLabel="label"
+      optionValue="value"
+      [(ngModel)]="filters.hasImage" />
+  </div>
+
+  <div class="drawer-actions">
+    <p-button label="清除" icon="pi pi-times" severity="secondary" [outlined]="true" (onClick)="clearFilters()" />
+    <p-button label="搜尋" icon="pi pi-search" (onClick)="applyFilters()" />
+  </div>
+</p-drawer>
