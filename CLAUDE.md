@@ -96,6 +96,14 @@ directly, and the API's CORS policy allows any localhost origin.
     points at `Partner` but the schema declares **no FK constraint** for it, so a delete would silently
     orphan those rows. `SeminarCount` is in the guard anyway. Grep for `{Table}_pkid` columns, not just
     for `FOREIGN KEY` clauses.
+  - **Some FKs are `ON DELETE CASCADE` — there the guard is the *only* protection.** Elsewhere the 409 is
+    a readability upgrade: the DB would have rejected the delete anyway and the guard just turns a raw FK
+    violation into a sentence. Not so for `FK_Course_CourseGroup` (and `FK_CourseInCertification_Course`,
+    `FK_CourseJobCategories_Course`, `FK_CertificationJobCategories_Certification`). `DELETE FROM
+    CourseGroup WHERE pkid = 2` **succeeds**, silently destroying every `Course` in the group and then
+    cascading on into *their* children. `CourseGroupsController.Delete` checks `CourseCount` before the
+    DELETE ever reaches SQL Server, and that check is load-bearing. Grep the `ALTER TABLE … ADD CONSTRAINT`
+    block for `ON DELETE CASCADE` before writing any delete path.
 - **Don't invent constraints the schema doesn't have.** `Partner.AppKey` reads like a natural key, but
   there is no UNIQUE index on it — only `PK_Partner` on `pkid` — so the API adds **no** duplicate-AppKey
   409, and `AppKey` is freely editable. Contrast `AppRole.RoleId`, which really is a clustered PK and
@@ -121,6 +129,17 @@ directly, and the API's CORS policy allows any localhost origin.
 - **New repositories must be swapped in `CmsApiFactory`.** It removes each `I{Table}Repository` and
   registers an in-memory fake. Miss one and the test host resolves the real Dapper repository, and
   those tests will try to reach SQL Server.
+- **`p-table` sorts its bound array *in place*.** If a list component's default sort is anything other
+  than the order the mock data is already in, the table silently reorders the very array the spec holds a
+  reference to — and `items[1]` stops being the row you wrote down. This bites any list not sorted by
+  `pkid` (e.g. `CourseGroupList`, which defaults to `description`). In component specs return a fresh copy
+  per call (`service.query.and.callFake(() => of([{ ...a }, { ...b }]))`) and assert against named consts,
+  never `items[i]` or `tbody tr[i]` — locate rows by their text instead.
+- **Don't assert an exact Chinese sort order.** SQL Server orders `nvarchar` by the database collation;
+  an in-memory fake orders by whatever comparer you gave it (and the browser by its own locale). None of
+  the three agree — e.g. code-point order puts 資料庫 before 資訊安全, and the DB may not. An exact-sequence
+  assertion tests the fake, not the API. Assert the property that matters (the sort key is `Description`,
+  not `pkid`) and pin the fake's order only with a comment saying why it may differ in production.
 - **PrimeNG major version tracks Angular's.** Angular 20 → PrimeNG 20. Installing `primeng@latest`
   pulls v21 and fails peer resolution.
 - **UTF-8 through the shell.** Chinese characters in a JSON body passed inline to `curl` via Bash get
@@ -144,6 +163,8 @@ matches the table you're adding:
 | `Partner` | `smallint` IDENTITY | the DB generates the key (the common case) |
 
 `Partner` is also the reference for a multi-child delete guard and for a table with no outbound FKs.
+`CourseGroup` is the reference for a **cascading** FK — the case where the delete guard is the only thing
+preventing data loss — and for a single-column table (one form field, keyword-only filter; don't pad it).
 
 1. Read the table in `database/*.sql` and write a spec from `spec/feature-spec.template.md`,
    saved to `spec/{sub-system}/{Table}.md`. Check whether `pkid` is really an IDENTITY.
