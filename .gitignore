@@ -1,0 +1,23 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# Angular / Node
+node_modules/
+dist/
+.angular/
+npm-debug.log*
+
+# Test output
+TestResults/
+coverage/
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
+
+# OS
+Thumbs.db
+.DS_Store

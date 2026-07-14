@@ -1,0 +1,51 @@
+<form [formGroup]="form" (ngSubmit)="save()">
+  <div class="page-toolbar">
+    <div class="page-title">
+      <h1>{{ isEdit() ? '編輯角色' : '新增角色' }}</h1>
+    </div>
+
+    <div class="page-actions">
+      <p-button label="取消" icon="pi pi-times" severity="secondary" type="button" (onClick)="cancel()" />
+      <p-button label="儲存" icon="pi pi-check" severity="success" type="submit" [loading]="saving()" />
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">角色資料</h2>
+
+    <div class="field">
+      <label for="roleId">角色代碼<span class="required-mark">*</span></label>
+      <input id="roleId" pInputText class="w-full" formControlName="roleId" maxlength="200" />
+      @if (isEdit()) {
+        <small class="field-hint">角色代碼建立後不可修改。</small>
+      }
+      @if (isInvalid('roleId')) {
+        <div class="field-error">角色代碼為必填，且長度不可超過 200 字。</div>
+      }
+    </div>
+
+    <div class="field">
+      <label for="roleName">角色名稱<span class="required-mark">*</span></label>
+      <input id="roleName" pInputText class="w-full" formControlName="roleName" maxlength="200" />
+      @if (isInvalid('roleName')) {
+        <div class="field-error">角色名稱為必填，且長度不可超過 200 字。</div>
+      }
+    </div>
+
+    <div class="field">
+      <label for="permissionLevel">權限等級<span class="required-mark">*</span></label>
+      <p-inputnumber inputId="permissionLevel" styleClass="w-full" [min]="0" formControlName="permissionLevel" />
+      @if (isInvalid('permissionLevel')) {
+        <div class="field-error">權限等級為必填，且不可小於 0。</div>
+      }
+    </div>
+
+    <div class="field">
+      <label for="description">描述</label>
+      <input id="description" pInputText class="w-full" formControlName="description" maxlength="400" />
+      @if (isInvalid('description')) {
+        <div class="field-error">描述長度不可超過 400 字。</div>
+      }
+    </div>
+  </div>
+</form>

@@ -1,0 +1,46 @@
+<div class="layout" [class.layout-collapsed]="collapsed()">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <span class="brand">{{ title() }}</span>
+      <button
+        type="button"
+        class="sidebar-toggle"
+        [attr.aria-label]="collapsed() ? '展開選單' : '收合選單'"
+        (click)="toggleSidebar()">
+        <i class="pi" [class.pi-angle-left]="!collapsed()" [class.pi-angle-right]="collapsed()"></i>
+      </button>
+    </div>
+
+    <nav class="sidebar-nav">
+      @for (group of navGroups(); track group.label) {
+        <div class="nav-group">
+          <button type="button" class="nav-group-header" (click)="toggleGroup(group)">
+            <i [class]="group.icon"></i>
+            <span class="nav-label">{{ group.label }}</span>
+            <i class="pi nav-caret" [class.pi-angle-down]="group.expanded" [class.pi-angle-right]="!group.expanded"></i>
+          </button>
+
+          @if (group.expanded) {
+            <ul class="nav-items">
+              @for (item of group.items; track item.route) {
+                <li>
+                  <a [routerLink]="item.route" routerLinkActive="active">
+                    <i [class]="item.icon"></i>
+                    <span class="nav-label">{{ item.label }}</span>
+                  </a>
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      }
+    </nav>
+  </aside>
+
+  <main class="content">
+    <router-outlet />
+  </main>
+</div>
+
+<p-toast position="top-right" />
+<p-confirmDialog />

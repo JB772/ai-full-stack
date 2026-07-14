@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CMS.API.Tests/CMS.API.Tests.csproj" />
+    <Project Path="src/CMS.API/CMS.API.csproj" />
+  </Folder>
+</Solution>

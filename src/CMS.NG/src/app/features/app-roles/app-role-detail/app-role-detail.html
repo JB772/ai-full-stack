@@ -1,0 +1,41 @@
+<div class="page-toolbar">
+  <div class="page-title">
+    <h1>檢視角色</h1>
+    @if (role()) {
+      <span class="page-subtitle">{{ role()!.roleId }}</span>
+    }
+  </div>
+
+  <div class="page-actions">
+    <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" routerLink="/app-roles" />
+    <p-button label="編輯" icon="pi pi-pencil" (onClick)="edit()" [disabled]="!role()" />
+  </div>
+</div>
+
+@if (role(); as r) {
+  <div class="card">
+    <h2 class="card-title">角色資料</h2>
+
+    <dl class="detail-grid">
+      <dt>主代碼</dt>
+      <dd>{{ r.pkid }}</dd>
+
+      <dt>角色代碼</dt>
+      <dd>{{ r.roleId }}</dd>
+
+      <dt>角色名稱</dt>
+      <dd>{{ r.roleName }}</dd>
+
+      <dt>權限等級</dt>
+      <dd>{{ r.permissionLevel }}</dd>
+
+      <dt>描述</dt>
+      <dd>{{ r.description || '—' }}</dd>
+
+      <dt>使用者數</dt>
+      <dd>{{ r.userCount }}</dd>
+    </dl>
+  </div>
+} @else if (loading()) {
+  <div class="card">載入中…</div>
+}
