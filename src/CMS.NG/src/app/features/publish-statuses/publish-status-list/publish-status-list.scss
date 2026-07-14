@@ -1,0 +1,34 @@
+.row-actions {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.flag-on {
+  color: var(--p-primary-color);
+}
+
+.empty-row {
+  text-align: center;
+  padding: 2rem 0;
+  color: var(--p-text-muted-color);
+}
+
+.drawer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+:host ::ng-deep .w-full,
+:host ::ng-deep .w-full input {
+  width: 100%;
+}

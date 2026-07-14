@@ -18,6 +18,9 @@ public class CmsApiFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<IAppRoleRepository>();
             services.AddSingleton<IAppRoleRepository, InMemoryAppRoleRepository>();
+
+            services.RemoveAll<IPublishStatusRepository>();
+            services.AddSingleton<IPublishStatusRepository, InMemoryPublishStatusRepository>();
         });
     }
 }

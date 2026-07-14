@@ -1,0 +1,50 @@
+<div class="page-toolbar">
+  <div class="page-title">
+    <h1>檢視發布狀態</h1>
+    @if (status()) {
+      <span class="page-subtitle">{{ status()!.description }}</span>
+    }
+  </div>
+
+  <div class="page-actions">
+    <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" routerLink="/publish-statuses" />
+    <p-button label="編輯" icon="pi pi-pencil" (onClick)="edit()" [disabled]="!status()" />
+  </div>
+</div>
+
+@if (status(); as s) {
+  <div class="card">
+    <h2 class="card-title">發布狀態資料</h2>
+
+    <dl class="detail-grid">
+      <dt>主代碼</dt>
+      <dd>{{ s.pkid }}</dd>
+
+      <dt>狀態說明</dt>
+      <dd>{{ s.description }}</dd>
+
+      <dt>草稿</dt>
+      <dd>{{ s.isDraft ? '是' : '否' }}</dd>
+
+      <dt>已發布</dt>
+      <dd>{{ s.isPublished ? '是' : '否' }}</dd>
+
+      <dt>已下架</dt>
+      <dd>{{ s.isDiscontinued ? '是' : '否' }}</dd>
+
+      <dt>課程數</dt>
+      <dd>{{ s.courseCount }}</dd>
+
+      <dt>促銷活動數</dt>
+      <dd>{{ s.promotionCount }}</dd>
+    </dl>
+
+    @if (s.courseCount > 0 || s.promotionCount > 0) {
+      <p class="usage-note">
+        此發布狀態仍被 {{ s.courseCount }} 筆課程、{{ s.promotionCount }} 筆促銷活動引用，無法刪除。
+      </p>
+    }
+  </div>
+} @else if (loading()) {
+  <div class="card">載入中…</div>
+}

@@ -1,0 +1,52 @@
+<form [formGroup]="form" (ngSubmit)="save()">
+  <div class="page-toolbar">
+    <div class="page-title">
+      <h1>{{ isEdit() ? '編輯發布狀態' : '新增發布狀態' }}</h1>
+    </div>
+
+    <div class="page-actions">
+      <p-button label="取消" icon="pi pi-times" severity="secondary" type="button" (onClick)="cancel()" />
+      <p-button label="儲存" icon="pi pi-check" severity="success" type="submit" [loading]="saving()" />
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">發布狀態資料</h2>
+
+    <div class="field">
+      <label for="pkid">主代碼<span class="required-mark">*</span></label>
+      <p-inputnumber inputId="pkid" styleClass="w-full" [min]="0" [max]="255" formControlName="pkid" />
+      @if (isEdit()) {
+        <small class="field-hint">主代碼建立後不可修改。</small>
+      } @else {
+        <small class="field-hint">主代碼由您指定 (0–255)，不可與現有代碼重複。</small>
+      }
+      @if (isInvalid('pkid')) {
+        <div class="field-error">主代碼為必填，且須介於 0 到 255。</div>
+      }
+    </div>
+
+    <div class="field">
+      <label for="description">狀態說明<span class="required-mark">*</span></label>
+      <input id="description" pInputText class="w-full" formControlName="description" maxlength="50" />
+      @if (isInvalid('description')) {
+        <div class="field-error">狀態說明為必填，且長度不可超過 50 字。</div>
+      }
+    </div>
+
+    <div class="field-checkbox">
+      <p-checkbox inputId="isDraft" formControlName="isDraft" [binary]="true" />
+      <label for="isDraft">草稿</label>
+    </div>
+
+    <div class="field-checkbox">
+      <p-checkbox inputId="isPublished" formControlName="isPublished" [binary]="true" />
+      <label for="isPublished">已發布</label>
+    </div>
+
+    <div class="field-checkbox">
+      <p-checkbox inputId="isDiscontinued" formControlName="isDiscontinued" [binary]="true" />
+      <label for="isDiscontinued">已下架</label>
+    </div>
+  </div>
+</form>
