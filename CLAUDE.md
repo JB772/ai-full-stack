@@ -79,6 +79,11 @@ directly, and the API's CORS policy allows any localhost origin.
   not be a junction (`PartnerCourseGroup`). The same table can appear in several `.sql` files — diff them,
   and grep *every* file when hunting for a table's children/FKs.
 - **PrimeNG major version tracks Angular's** (20 → 20); `primeng@latest` pulls v21 and fails peer resolution.
+- **QR codes use the framework-agnostic `qrcode` package, not `angularx-qrcode`** — it has no Angular
+  peer dep and returns a PNG data URL, which doubles as the `<img [src]>` and the download payload
+  (build an anchor with `href=dataUrl`, `download={name}.png`, `.click()`). See the QR block in
+  `course-detail` (title + image + download button in 基本資料). In tests, `qrcode.toDataURL` is
+  overloaded — `spyOn(QRCode, 'toDataURL') as unknown as jasmine.Spy` to stub it.
 
 ### Deep reference — read the relevant file before working in that area
 

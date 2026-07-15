@@ -77,6 +77,19 @@
         }
       </dd>
     </dl>
+
+    <div class="qr-block">
+      <div class="qr-title">{{ c.courseId }}</div>
+      @if (qrImage(); as qr) {
+        <img class="qr-image" [src]="qr" [alt]="c.courseId + ' QR Code'" width="240" height="240" />
+        <p-button
+          label="下載 QR Code"
+          icon="pi pi-download"
+          severity="secondary"
+          (onClick)="downloadQr()"
+        />
+      }
+    </div>
   </div>
 
   <div class="card">

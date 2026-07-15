@@ -3,6 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { TagModule } from 'primeng/tag';
 import { MessageService } from 'primeng/api';
+import QRCode from 'qrcode';
 import { Course } from '../course.model';
 import { CourseService } from '../course.service';
 
@@ -20,6 +21,18 @@ export class CourseDetail implements OnInit {
 
   protected readonly course = signal<Course | null>(null);
   protected readonly loading = signal(false);
+
+  /** PNG data URL of the rendered QR code, populated once the course loads. */
+  protected readonly qrImage = signal<string | null>(null);
+
+  /**
+   * The public course page the QR code points at. Built from the record's pkid and CourseId —
+   * matches the live site's `/Course/Show/{pkid}/{CourseId}` route shape.
+   */
+  protected readonly qrUrl = computed(() => {
+    const c = this.course();
+    return c ? `https://www.uuu.com.tw/Course/Show/${c.pkid}/${c.courseId}` : '';
+  });
 
   /** Any non-zero child count is what makes the API reject a delete with a 409. */
   protected readonly referenceCount = computed(() => {
@@ -40,6 +53,7 @@ export class CourseDetail implements OnInit {
       next: course => {
         this.course.set(course);
         this.loading.set(false);
+        this.generateQr();
       },
       error: () => {
         this.loading.set(false);
@@ -58,5 +72,33 @@ export class CourseDetail implements OnInit {
     if (course) {
       this.router.navigate(['/courses', course.pkid, 'edit']);
     }
+  }
+
+  /** Render the QR code for {@link qrUrl} into a PNG data URL held by {@link qrImage}. */
+  private generateQr(): void {
+    const url = this.qrUrl();
+    if (!url) {
+      return;
+    }
+
+    QRCode.toDataURL(url, { width: 240, margin: 1 })
+      .then(dataUrl => this.qrImage.set(dataUrl))
+      .catch(() =>
+        this.messageService.add({ severity: 'error', summary: 'QR 產生失敗', detail: '無法產生 QR Code。' })
+      );
+  }
+
+  /** Download the rendered QR code as `{CourseId}.png`. */
+  protected downloadQr(): void {
+    const image = this.qrImage();
+    const course = this.course();
+    if (!image || !course) {
+      return;
+    }
+
+    const link = document.createElement('a');
+    link.href = image;
+    link.download = `${course.courseId}.png`;
+    link.click();
   }
 }

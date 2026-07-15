@@ -3,9 +3,14 @@ import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MessageService } from 'primeng/api';
 import { of, throwError } from 'rxjs';
+import QRCode from 'qrcode';
 import { CourseDetail } from './course-detail';
 import { CourseService } from '../course.service';
 import { Course } from '../course.model';
+
+/** A 1x1 transparent PNG — stands in for a real QR render in tests. */
+const FAKE_QR_PNG =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC';
 
 function makeCourse(overrides: Partial<Course> = {}): Course {
   return {
@@ -50,10 +55,16 @@ describe('CourseDetail', () => {
   let fixture: ComponentFixture<CourseDetail>;
   let service: jasmine.SpyObj<CourseService>;
   let router: Router;
+  let qrSpy: jasmine.Spy;
 
   async function setup(course: Course = makeCourse()) {
     service = jasmine.createSpyObj<CourseService>('CourseService', ['getByPkid']);
     service.getByPkid.and.returnValue(of(course));
+
+    // Stub the QR renderer so tests don't depend on the real canvas encoder.
+    // `toDataURL` is overloaded, so spy on it as a plain jasmine.Spy.
+    qrSpy = spyOn(QRCode, 'toDataURL') as unknown as jasmine.Spy;
+    qrSpy.and.resolveTo(FAKE_QR_PNG);
 
     await TestBed.configureTestingModule({
       imports: [CourseDetail],
@@ -127,5 +138,49 @@ describe('CourseDetail', () => {
     fixture.detectChanges();
 
     expect(navigate).toHaveBeenCalledWith(['/courses']);
+  });
+
+  describe('QR code', () => {
+    it('encodes the public course URL built from pkid and CourseId', async () => {
+      await setup(makeCourse({ pkid: 42, courseId: 'AZ-900' }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(api().qrUrl()).toBe('https://www.uuu.com.tw/Course/Show/42/AZ-900');
+      expect(qrSpy).toHaveBeenCalledWith(
+        'https://www.uuu.com.tw/Course/Show/42/AZ-900',
+        jasmine.any(Object)
+      );
+    });
+
+    it('renders the QR image with CourseId as its title', async () => {
+      await setup(makeCourse({ courseId: 'AZ-900' }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const title: HTMLElement = fixture.nativeElement.querySelector('.qr-title');
+      expect(title.textContent?.trim()).toBe('AZ-900');
+
+      const img: HTMLImageElement = fixture.nativeElement.querySelector('.qr-image');
+      expect(img).toBeTruthy();
+      expect(img.getAttribute('src')).toBe(FAKE_QR_PNG);
+    });
+
+    it('downloads the QR code as a {CourseId}.png image', async () => {
+      await setup(makeCourse({ courseId: 'AZ-900' }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const anchor = document.createElement('a');
+      const clickSpy = spyOn(anchor, 'click');
+      spyOn(document, 'createElement').and.returnValue(anchor);
+
+      api().downloadQr();
+
+      expect(anchor.href).toContain('data:image/png');
+      expect(anchor.download).toBe('AZ-900.png');
+      expect(clickSpy).toHaveBeenCalled();
+    });
   });
 });
