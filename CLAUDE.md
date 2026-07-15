@@ -79,29 +79,6 @@ directly, and the API's CORS policy allows any localhost origin.
   not be a junction (`PartnerCourseGroup`). The same table can appear in several `.sql` files — diff them,
   and grep *every* file when hunting for a table's children/FKs.
 - **PrimeNG major version tracks Angular's** (20 → 20); `primeng@latest` pulls v21 and fails peer resolution.
-- **QR codes use the framework-agnostic `qrcode` package, not `angularx-qrcode`** — it has no Angular
-  peer dep and returns a PNG data URL, which doubles as the `<img [src]>` and the download payload
-  (build an anchor with `href=dataUrl`, `download={name}.png`, `.click()`). See the QR block in
-  `course-detail` (title + image + download button in 基本資料). In tests, `qrcode.toDataURL` is
-  overloaded — `spyOn(QRCode, 'toDataURL') as unknown as jasmine.Spy` to stub it.
-- **The viewport is the scroll container — there is no fixed app header.** `.layout` is a flex row
-  (sidebar + `.content`) with `min-height: 100vh`; the document itself scrolls. So a `.page-toolbar`
-  can be pinned with plain `position: sticky; top: 0` (+ a `z-index` above the fields) — no scroll
-  listener, no fixed positioning. It sticks to the viewport top within the content region without
-  covering the sidebar (a separate flex column) or a header (there is none), and the toolbar's opaque
-  `--p-content-background` keeps scrolling fields from showing through. `course-form` does this via a
-  `sticky-toolbar` class on both New and Edit (one component serves both). Assert it in a headless
-  Karma run with `getComputedStyle(el).position === 'sticky'`.
-- **In-place list editing is hand-rolled, not `pEditableColumn`.** The `course-list` cell editor is a
-  component-managed edit-state (`editing` signal) driven by `(dblclick)`, because PrimeNG's
-  `pEditableColumn` opens on **single** click and the requirement was double-click only. Don't reach for
-  `pEditableColumn`/`p-cellEditor` here. See the Course row in `docs/reference-features.md`.
-- **Overlay editors (`p-select`, `p-datepicker`) must NOT commit on blur.** Their panels are
-  `appendTo="body"`, so a blur-to-save fires the instant you click an option / a date — tearing the editor
-  down before the pick lands, so the control looks like it "won't edit". The `p-select` commits on
-  `(onChange)` (+ `(onHide)` to close on click-away); the `p-datepicker` on `(onSelect)` + `(onClose)`.
-  Only plain text/number inputs are safe to commit on `(blur)`. See the Course row in
-  `docs/reference-features.md`.
 
 ### Deep reference — read the relevant file before working in that area
 
@@ -111,6 +88,7 @@ directly, and the API's CORS policy allows any localhost origin.
 | `docs/delete-guards.md` | writing any DELETE — 409-not-FK guards, multi-child messages, no-FK orphans, and load-bearing `ON DELETE CASCADE` checks |
 | `docs/relationships-and-nav.md` | touching FKs or N-N — `Course` multi-map nav objects, nullable-FK `LEFT JOIN`, `forkJoin` lookups, `date` ⇄ `p-datepicker`, why N-N editors are deferred |
 | `docs/reference-features.md` | adding a feature — the *secondary* pattern each built feature is the reference for (multi-child & cascading delete guards, multi-map nav, write-only column, custom scheduler UI, lookup-only FK targets) |
+| `docs/ui-patterns.md` | building a frontend page — sticky action toolbar, QR download, inline list-cell editing, overlay-editor (`p-select`/`p-datepicker`) blur trap |
 | `docs/schema-and-testing.md` | reading the schema or writing tests — invented-constraint traps, multi-file `.sql`, `p-table` in-place sort, don't-assert-Chinese-sort-order |
 | `docs/environment.md` | a Windows/PowerShell dev trap — Node PATH, `.ps1` execution policy, the `dotnet test` file lock, headless Chrome, UTF-8 curl |
 
