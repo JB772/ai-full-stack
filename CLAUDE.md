@@ -78,6 +78,20 @@ directly, and the API's CORS policy allows any localhost origin.
   index (`Partner.AppKey` — freely editable, no 409), and a two-FK table may carry payload columns and so
   not be a junction (`PartnerCourseGroup`). The same table can appear in several `.sql` files — diff them,
   and grep *every* file when hunting for a table's children/FKs.
+- **Login / JWT auth is wired up (`POST /api/auth/login`).** `AuthController` + `AuthRepository`
+  (`IAuthRepository`) + `Security/JwtTokenService` (`System.IdentityModel.Tokens.Jwt`). The credential
+  check — `UserId` match **and** `IsActive = 1` **and** `PasswordHash = SHA256(password)` (uppercase hex
+  via `PasswordHasher`) — runs entirely in the SQL `WHERE` clause, so `PasswordHash` is never SELECTed.
+  Every failure (wrong password, unknown UserId, inactive, empty input) returns the *same* generic
+  `401 {"message":"invalid credentials"}` — don't leak which check failed. On success the JWT is
+  HMAC-SHA256-signed with `SysConfig['appConfig'].symmetricSecurityKey` **read at runtime** (never
+  hard-coded — same JSON-blob path `AppUserRepository` uses for `defaultPassword`), carries `userId` /
+  `userName` + one `role` claim per `AppUserRole.RoleId`, and expires 24h after issue. Response is
+  `{ userId, userName, accessToken }` — never `PasswordHash`. The route is `/api/auth/login`, **not** the
+  kebab-plural CRUD convention (auth is not a table, so there's no list/detail/form triad). Like the
+  default-password path, the **live SysConfig key lookup is not covered by `dotnet test`** — the
+  `InMemoryAuthRepository` fake (swapped into `CmsApiFactory`) supplies a known ≥32-char key; verify the
+  real Dapper path via Swagger against a DB whose `appConfig` row has `symmetricSecurityKey`.
 - **PrimeNG major version tracks Angular's** (20 → 20); `primeng@latest` pulls v21 and fails peer resolution.
 - **QR codes use the framework-agnostic `qrcode` package, not `angularx-qrcode`** — it has no Angular
   peer dep and returns a PNG data URL, which doubles as the `<img [src]>` and the download payload

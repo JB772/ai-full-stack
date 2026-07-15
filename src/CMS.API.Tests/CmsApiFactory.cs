@@ -16,6 +16,9 @@ public class CmsApiFactory : WebApplicationFactory<Program>
 
         builder.ConfigureServices(services =>
         {
+            services.RemoveAll<IAuthRepository>();
+            services.AddSingleton<IAuthRepository, InMemoryAuthRepository>();
+
             services.RemoveAll<IAppRoleRepository>();
             services.AddSingleton<IAppRoleRepository, InMemoryAppRoleRepository>();
 

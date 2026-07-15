@@ -1,5 +1,6 @@
 using CMS.API.Data;
 using CMS.API.Repositories;
+using CMS.API.Security;
 using Dapper;
 using Microsoft.OpenApi.Models;
 
@@ -41,6 +42,8 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddSingleton<IDbConnectionFactory, SqlConnectionFactory>();
+builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IAppRoleRepository, AppRoleRepository>();
 builder.Services.AddScoped<IAppUserRepository, AppUserRepository>();
 builder.Services.AddScoped<IPublishStatusRepository, PublishStatusRepository>();

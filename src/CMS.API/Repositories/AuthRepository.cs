@@ -1,0 +1,64 @@
+using System.Text.Json;
+using CMS.API.Data;
+using CMS.API.Models;
+using Dapper;
+
+namespace CMS.API.Repositories;
+
+/// <summary>
+/// 登入相關資料存取。密碼雜湊只在 SQL WHERE 子句中比對 —— PasswordHash 從不 SELECT 出來，
+/// 不會離開資料層。簽章金鑰於執行期由 SysConfig 讀取，不寫死在程式碼。
+/// </summary>
+public class AuthRepository(IDbConnectionFactory connectionFactory) : IAuthRepository
+{
+    public async Task<AuthenticatedUser?> AuthenticateAsync(string userId, string passwordHash)
+    {
+        using var conn = connectionFactory.CreateConnection();
+
+        // 三個條件全部在 SQL 內比對：UserId 相符、啟用中、且密碼雜湊一致。
+        // 只選出可對外的欄位，PasswordHash 永不外流。
+        const string userSql = """
+            SELECT UserId, UserName
+            FROM AppUser
+            WHERE UserId = @UserId AND IsActive = 1 AND PasswordHash = @PasswordHash
+            """;
+
+        var user = await conn.QuerySingleOrDefaultAsync<AuthenticatedUser>(
+            userSql, new { UserId = userId, PasswordHash = passwordHash });
+
+        if (user is null)
+        {
+            return null;
+        }
+
+        const string rolesSql = "SELECT RoleId FROM AppUserRole WHERE UserId = @UserId ORDER BY RoleId";
+        var roles = await conn.QueryAsync<string>(rolesSql, new { user.UserId });
+        user.RoleIds = roles.ToList();
+
+        return user;
+    }
+
+    /// <summary>讀取 SysConfig['appConfig'] (JSON) 並取出其 `symmetricSecurityKey` 屬性。</summary>
+    public async Task<string> GetSigningKeyAsync()
+    {
+        using var conn = connectionFactory.CreateConnection();
+
+        var json = await conn.ExecuteScalarAsync<string?>(
+            "SELECT configValue FROM SysConfig WHERE configKey = @Key", new { Key = "appConfig" });
+
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            throw new InvalidOperationException("找不到系統設定 appConfig，無法取得 JWT 簽章金鑰。");
+        }
+
+        using var doc = JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("symmetricSecurityKey", out var value)
+            || value.ValueKind != JsonValueKind.String
+            || string.IsNullOrEmpty(value.GetString()))
+        {
+            throw new InvalidOperationException("系統設定 appConfig 缺少 symmetricSecurityKey。");
+        }
+
+        return value.GetString()!;
+    }
+}
