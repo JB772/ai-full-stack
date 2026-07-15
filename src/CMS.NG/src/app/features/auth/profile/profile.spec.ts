@@ -18,6 +18,20 @@ function signIn(userName = '編輯者', roles = ['Editor', 'Viewer']): void {
 describe('Profile', () => {
   let httpMock: HttpTestingController;
   const profileUrl = `${environment.apiBaseUrl}/Auth/profile`;
+  const changePasswordUrl = `${environment.apiBaseUrl}/Auth/change-password`;
+
+  /** Sets a change-password field's value and fires the input event so the reactive control updates. */
+  function typeInto(el: HTMLElement, id: string, value: string): void {
+    const input = el.querySelector(`#${id}`) as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+  }
+
+  /** Submits the change-password form (the second form on the page). */
+  function submitPasswordForm(el: HTMLElement): void {
+    (el.querySelector('[data-testid="change-password-form"]') as HTMLFormElement)
+      .dispatchEvent(new Event('submit'));
+  }
 
   beforeEach(async () => {
     sessionStorage.clear();
@@ -104,5 +118,101 @@ describe('Profile', () => {
     (el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
 
     expect(httpMock.match(profileUrl).length).toBe(0);
+  });
+
+  // ---------- Change Password: client-side validation ----------
+
+  it('does not call the API when the new password fails the complexity rule', () => {
+    const fixture = TestBed.createComponent(Profile);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    typeInto(el, 'currentPassword', 'editor-pass');
+    typeInto(el, 'newPassword', 'abcdefgh'); // 8 chars but only 1 class
+    typeInto(el, 'confirmNewPassword', 'abcdefgh');
+    fixture.detectChanges();
+
+    submitPasswordForm(el);
+    fixture.detectChanges();
+
+    // No request is made, and the complexity error is shown.
+    expect(httpMock.match(changePasswordUrl).length).toBe(0);
+    expect(el.querySelector('[data-testid="complexity-error"]')).not.toBeNull();
+  });
+
+  it('does not call the API when the new password is too short', () => {
+    const fixture = TestBed.createComponent(Profile);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    typeInto(el, 'currentPassword', 'editor-pass');
+    typeInto(el, 'newPassword', 'Ab1!xy'); // 4 classes but only 6 chars
+    typeInto(el, 'confirmNewPassword', 'Ab1!xy');
+    fixture.detectChanges();
+
+    submitPasswordForm(el);
+    fixture.detectChanges();
+
+    expect(httpMock.match(changePasswordUrl).length).toBe(0);
+    expect(el.querySelector('[data-testid="complexity-error"]')).not.toBeNull();
+  });
+
+  it('does not call the API when new and confirm do not match', () => {
+    const fixture = TestBed.createComponent(Profile);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    typeInto(el, 'currentPassword', 'editor-pass');
+    typeInto(el, 'newPassword', 'New-Pass1');
+    typeInto(el, 'confirmNewPassword', 'New-Pass2');
+    fixture.detectChanges();
+
+    submitPasswordForm(el);
+    fixture.detectChanges();
+
+    expect(httpMock.match(changePasswordUrl).length).toBe(0);
+    expect(el.querySelector('[data-testid="mismatch-error"]')).not.toBeNull();
+  });
+
+  it('does not call the API when the current password is empty', () => {
+    const fixture = TestBed.createComponent(Profile);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    typeInto(el, 'newPassword', 'New-Pass1');
+    typeInto(el, 'confirmNewPassword', 'New-Pass1');
+    fixture.detectChanges();
+
+    submitPasswordForm(el);
+    fixture.detectChanges();
+
+    expect(httpMock.match(changePasswordUrl).length).toBe(0);
+  });
+
+  it('posts the three passwords and resets the form on a successful change', () => {
+    const fixture = TestBed.createComponent(Profile);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    typeInto(el, 'currentPassword', 'editor-pass');
+    typeInto(el, 'newPassword', 'New-Pass1');
+    typeInto(el, 'confirmNewPassword', 'New-Pass1');
+    fixture.detectChanges();
+
+    submitPasswordForm(el);
+
+    const req = httpMock.expectOne(changePasswordUrl);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({
+      currentPassword: 'editor-pass',
+      newPassword: 'New-Pass1',
+      confirmNewPassword: 'New-Pass1'
+    });
+    req.flush(null);
+    fixture.detectChanges();
+
+    // Fields are cleared after a successful change.
+    expect((el.querySelector('#newPassword') as HTMLInputElement).value).toBe('');
+    expect((el.querySelector('#confirmNewPassword') as HTMLInputElement).value).toBe('');
   });
 });

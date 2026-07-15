@@ -80,4 +80,55 @@ public class AuthController(IAuthRepository repository, IJwtTokenService tokenSe
             Roles = updated.RoleIds
         });
     }
+
+    /// <summary>
+    /// 變更登入者本人的密碼。身分 (UserId) 一律取自 JWT，永不採用請求本文。流程：
+    /// (1) 先驗證目前密碼 (SHA256 須與資料庫 PasswordHash 相符)，不符則不做任何變更；
+    /// (2) 檢查新密碼複雜度；(3) 新密碼與確認密碼須相符；(4) 成功後寫入新雜湊並更新 PasswordUpdatedTime。
+    /// 明文密碼僅用於驗證與雜湊，密碼雜湊永不對外回傳。此端點需有效 Bearer 權杖。
+    /// </summary>
+    [HttpPost("change-password")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        // 身分永遠取自權杖 (NameClaimType = userId)，忽略任何本文中的 UserId。
+        var userId = User.FindFirstValue(JwtTokenService.UserIdClaimType);
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized();
+        }
+
+        var currentPassword = request?.CurrentPassword ?? string.Empty;
+        var newPassword = request?.NewPassword ?? string.Empty;
+        var confirmNewPassword = request?.ConfirmNewPassword ?? string.Empty;
+
+        // (1) 驗證目前密碼：重用登入驗證 (UserId 相符 + IsActive + PasswordHash 相符)，全在 SQL WHERE 內比對。
+        var currentHash = PasswordHasher.Hash(currentPassword);
+        var user = await repository.AuthenticateAsync(userId, currentHash);
+        if (user is null)
+        {
+            return BadRequest(new { message = "目前密碼不正確 Current password is incorrect." });
+        }
+
+        // (2) 新密碼複雜度。
+        if (!PasswordPolicy.IsComplexEnough(newPassword))
+        {
+            return BadRequest(new { message = PasswordPolicy.ComplexityMessage });
+        }
+
+        // (3) 新密碼與確認密碼須相符。
+        if (newPassword != confirmNewPassword)
+        {
+            return BadRequest(new { message = "新密碼與確認密碼不一致 New password and confirmation do not match." });
+        }
+
+        // (4) 成功：只寫入新雜湊 (含 PasswordUpdatedTime = now)，永不回傳任何雜湊。
+        var newHash = PasswordHasher.Hash(newPassword);
+        await repository.UpdatePasswordAsync(userId, newHash);
+
+        return NoContent();
+    }
 }

@@ -39,3 +39,60 @@
     </div>
   </div>
 </form>
+
+<form [formGroup]="pwForm" (ngSubmit)="changePassword()" data-testid="change-password-form">
+  <div class="card">
+    <h2 class="card-title">變更密碼 Change Password</h2>
+
+    <div class="field">
+      <label for="currentPassword">目前密碼 Current Password<span class="required-mark">*</span></label>
+      <input
+        id="currentPassword"
+        type="password"
+        pInputText
+        class="w-full"
+        formControlName="currentPassword"
+        autocomplete="current-password" />
+      @if (pwForm.controls.currentPassword.invalid && pwForm.controls.currentPassword.touched) {
+        <div class="field-error">請輸入目前密碼 Current password is required.</div>
+      }
+    </div>
+
+    <div class="field">
+      <label for="newPassword">新密碼 New Password<span class="required-mark">*</span></label>
+      <input
+        id="newPassword"
+        type="password"
+        pInputText
+        class="w-full"
+        formControlName="newPassword"
+        autocomplete="new-password" />
+      <small class="field-hint">{{ complexityMessage }}</small>
+      @if (showComplexityError()) {
+        <div class="field-error" data-testid="complexity-error">{{ complexityMessage }}</div>
+      }
+    </div>
+
+    <div class="field">
+      <label for="confirmNewPassword">確認新密碼 Confirm New Password<span class="required-mark">*</span></label>
+      <input
+        id="confirmNewPassword"
+        type="password"
+        pInputText
+        class="w-full"
+        formControlName="confirmNewPassword"
+        autocomplete="new-password" />
+      @if (showMismatchError()) {
+        <div class="field-error" data-testid="mismatch-error">新密碼與確認密碼不一致 New password and confirmation do not match.</div>
+      }
+    </div>
+
+    <div class="page-actions">
+      <p-button
+        label="變更密碼"
+        icon="pi pi-lock"
+        type="submit"
+        [loading]="changingPassword()" />
+    </div>
+  </div>
+</form>

@@ -27,3 +27,13 @@ export interface ProfileResponse {
   userName: string;
   roles: string[];
 }
+
+/**
+ * Body posted to POST /api/Auth/change-password. The server derives identity from the JWT, so no
+ * userId is sent. All three are plaintext, used only in transit; the server never returns any hash.
+ */
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  confirmNewPassword: string;
+}

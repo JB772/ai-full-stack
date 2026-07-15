@@ -109,10 +109,33 @@ directly, and the API's CORS policy allows any localhost origin.
   and, on success, writes the new name back into the `auth-profile` session blob **and** the `profileSignal`, so
   `App`'s `userName()` refreshes live — roles/token in the session are left intact. Like login, the real Dapper
   `UPDATE` isn't covered by `dotnet test` (the in-memory fake mutates its seed list); smoke-test via Swagger.
+- **Self-service password change is `POST /api/auth/change-password` (authenticated) — identity comes from
+  the JWT, never the body.** `AuthController.ChangePassword` (`[Authorize]`) reads `UserId` from
+  `User.FindFirstValue(JwtTokenService.UserIdClaimType)`; `ChangePasswordRequest` carries only the three
+  plaintext fields (`CurrentPassword` / `NewPassword` / `ConfirmNewPassword`) — no `UserId`. Order is fixed
+  and each failure is a **400 with a descriptive `message`** (not the login-style generic 401, since the
+  caller is already authenticated and the UI shows which check failed): **(1)** verify current password by
+  *reusing* `IAuthRepository.AuthenticateAsync(userId, SHA256(current))` (hash compared in the SQL `WHERE`,
+  never SELECTed) — wrong → 400, nothing changes; **(2)** complexity via `Security/PasswordPolicy.IsComplexEnough`
+  (length ≥ 8 **and** ≥ 3 of 4 classes: upper/lower/digit/symbol, where "symbol" = not letter-or-digit) →
+  400 with the exact bilingual `PasswordPolicy.ComplexityMessage`; **(3)** `NewPassword != ConfirmNewPassword`
+  → 400; **(4)** success → `IAuthRepository.UpdatePasswordAsync(userId, SHA256(new))`
+  (Dapper `UPDATE AppUser SET PasswordHash = @hash, PasswordUpdatedTime = SYSDATETIME() WHERE UserId` —
+  `SYSDATETIME()` to match the existing reset-password path in `AppUserRepository`) and
+  **204 No Content**. **No password hash ever crosses the wire in either direction** (success returns an empty
+  body). `PasswordPolicy` is a static shared source of truth: the Angular `passwordComplexityValidator` and
+  `COMPLEXITY_MESSAGE` in `features/auth/profile/profile.ts` mirror it verbatim. Frontend: a second `<form
+  data-testid="change-password-form">` on the same `Profile` page (below 帳號資料), a group-level
+  `passwordsMatchValidator`, and `AuthService.changePassword({ currentPassword, newPassword, confirmNewPassword })`
+  which **touches no session state** (the token stays valid). Like login/profile, the real Dapper `UPDATE`
+  isn't covered by `dotnet test`; the `InMemoryAuthRepository` fake stamps `PasswordUpdatedTime` and swaps the
+  hash, so `ChangePasswordTests` asserts state via the singleton fake (`_factory.Services.GetRequiredService`)
+  **and** end-to-end by re-logging-in with the new password — smoke-test the live path via Swagger.
 - **Authorization is global: every endpoint requires a valid Bearer token except `AuthController.Login`.**
   `Program.cs` sets a `FallbackPolicy` (`RequireAuthenticatedUser`) + `AddJwtBearer`; `[AllowAnonymous]`
   is **action-scoped on `Login` only** (not the whole controller — `AuthController` also hosts the
-  authenticated `PUT /api/auth/profile`, which carries `[Authorize]` and falls under the global policy). The bearer signing key is resolved at runtime by
+  authenticated `PUT /api/auth/profile` and `POST /api/auth/change-password`, which carry `[Authorize]` and
+  fall under the global policy). The bearer signing key is resolved at runtime by
   `JwtSigningKeyProvider` (a singleton that reads the same `symmetricSecurityKey` via `IAuthRepository`
   and caches it) and fed to `TokenValidationParameters.IssuerSigningKeyResolver`; validation uses
   `MapInboundClaims = false` + `RoleClaimType = "role"`, no issuer/audience. **Consequence for tests:**

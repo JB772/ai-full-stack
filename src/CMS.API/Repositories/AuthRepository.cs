@@ -86,4 +86,19 @@ public class AuthRepository(IDbConnectionFactory connectionFactory) : IAuthRepos
 
         return user;
     }
+
+    public async Task<bool> UpdatePasswordAsync(string userId, string newPasswordHash)
+    {
+        using var conn = connectionFactory.CreateConnection();
+
+        // 只寫入雜湊，順帶記錄變更時間。用 SYSDATETIME() 與既有的 reset-password 路徑 (AppUserRepository) 一致。
+        const string sql = """
+            UPDATE AppUser
+            SET PasswordHash = @PasswordHash, PasswordUpdatedTime = SYSDATETIME()
+            WHERE UserId = @UserId
+            """;
+
+        var affected = await conn.ExecuteAsync(sql, new { UserId = userId, PasswordHash = newPasswordHash });
+        return affected > 0;
+    }
 }

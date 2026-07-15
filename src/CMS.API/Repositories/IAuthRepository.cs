@@ -18,4 +18,11 @@ public interface IAuthRepository
     /// userName 已去除前後空白且非空。回傳更新後含角色的使用者；查無此帳號時回傳 null。
     /// </summary>
     Task<AuthenticatedUser?> UpdateUserNameAsync(string userId, string userName);
+
+    /// <summary>
+    /// 將指定使用者的 PasswordHash 更新為傳入的雜湊，並將 PasswordUpdatedTime 設為現在時間。
+    /// 呼叫端須先驗證目前密碼 (透過 <see cref="AuthenticateAsync"/>) 且新密碼已通過複雜度檢查。
+    /// 傳入的是「已雜湊」的新密碼；明文密碼永不進入資料層。回傳是否確實更新了一筆資料。
+    /// </summary>
+    Task<bool> UpdatePasswordAsync(string userId, string newPasswordHash);
 }

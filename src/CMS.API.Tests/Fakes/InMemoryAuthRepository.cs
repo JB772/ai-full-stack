@@ -16,7 +16,9 @@ public class InMemoryAuthRepository : IAuthRepository
 {
     public const string SigningKey = "test-jwt-signing-key-0123456789-abcdefghijklmnop";
 
-    private sealed record Account(string UserId, string UserName, bool IsActive, string PasswordHash, string[] RoleIds);
+    private sealed record Account(
+        string UserId, string UserName, bool IsActive, string PasswordHash, string[] RoleIds,
+        DateTime? PasswordUpdatedTime = null);
 
     private readonly List<Account> _accounts =
     [
@@ -25,6 +27,14 @@ public class InMemoryAuthRepository : IAuthRepository
         // Correct password but disabled — must still fail with 401.
         new("disabled", "停用帳號", IsActive: false, PasswordHasher.Hash("still-correct"), ["Viewer"]),
     ];
+
+    /// <summary>Test inspector: the currently stored PasswordHash for a user (null if unknown).</summary>
+    public string? GetStoredPasswordHash(string userId) =>
+        _accounts.SingleOrDefault(a => a.UserId == userId)?.PasswordHash;
+
+    /// <summary>Test inspector: when the password was last updated (null if never / unknown user).</summary>
+    public DateTime? GetPasswordUpdatedTime(string userId) =>
+        _accounts.SingleOrDefault(a => a.UserId == userId)?.PasswordUpdatedTime;
 
     public Task<AuthenticatedUser?> AuthenticateAsync(string userId, string passwordHash)
     {
@@ -60,5 +70,22 @@ public class InMemoryAuthRepository : IAuthRepository
             UserName = updated.UserName,
             RoleIds = updated.RoleIds
         });
+    }
+
+    public Task<bool> UpdatePasswordAsync(string userId, string newPasswordHash)
+    {
+        var index = _accounts.FindIndex(a => a.UserId == userId);
+        if (index < 0)
+        {
+            return Task.FromResult(false);
+        }
+
+        // Mirror the real UPDATE: swap the stored hash and stamp the update time (real repo uses GETDATE()).
+        _accounts[index] = _accounts[index] with
+        {
+            PasswordHash = newPasswordHash,
+            PasswordUpdatedTime = DateTime.UtcNow
+        };
+        return Task.FromResult(true);
     }
 }

@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 import { environment } from '@env/environment';
-import { AuthProfile, LoginRequest, ProfileResponse } from './auth.model';
+import { AuthProfile, ChangePasswordRequest, LoginRequest, ProfileResponse } from './auth.model';
 
 /** Session-storage key holding the signed-in {@link AuthProfile}. */
 export const AUTH_STORAGE_KEY = 'auth-profile';
@@ -17,6 +17,7 @@ export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly loginUrl = `${environment.apiBaseUrl}/Auth/login`;
   private readonly profileUrl = `${environment.apiBaseUrl}/Auth/profile`;
+  private readonly changePasswordUrl = `${environment.apiBaseUrl}/Auth/change-password`;
 
   private readonly profileSignal = signal<AuthProfile | null>(this.readProfile());
 
@@ -50,6 +51,15 @@ export class AuthService {
     return this.http.put<ProfileResponse>(this.profileUrl, { userName }).pipe(
       tap(response => this.applyUserName(response.userName))
     );
+  }
+
+  /**
+   * Changes the signed-in user's own password. The server derives identity from the JWT and verifies
+   * the current password server-side. No session/token state changes on success (the token stays valid),
+   * so there is nothing to persist here — the caller just surfaces success/failure.
+   */
+  changePassword(request: ChangePasswordRequest): Observable<void> {
+    return this.http.post<void>(this.changePasswordUrl, request);
   }
 
   /** Refreshes just the userName in the persisted profile + signal, leaving token and roles intact. */
