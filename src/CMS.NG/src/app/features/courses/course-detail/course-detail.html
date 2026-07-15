@@ -1,0 +1,143 @@
+<div class="page-toolbar">
+  <div class="page-title">
+    <h1>檢視課程</h1>
+    @if (course()) {
+      <span class="page-subtitle">{{ course()!.title }}</span>
+    }
+  </div>
+
+  <div class="page-actions">
+    <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" (onClick)="back()" />
+    <p-button label="編輯" icon="pi pi-pencil" (onClick)="edit()" [disabled]="!course()" />
+  </div>
+</div>
+
+@if (course(); as c) {
+  <div class="card">
+    <h2 class="card-title">基本資料</h2>
+
+    <dl class="detail-grid">
+      <dt>主代碼</dt>
+      <dd>{{ c.pkid }}</dd>
+
+      <dt>顯示順序</dt>
+      <dd>{{ c.displayOrder }}</dd>
+
+      <dt>簡介代碼</dt>
+      <dd>{{ c.courseId }}</dd>
+
+      <dt>科目代碼</dt>
+      <dd>{{ c.prodCourseId }}</dd>
+
+      <dt>課程名稱</dt>
+      <dd>{{ c.title }}</dd>
+
+      <dt>官方課程名稱</dt>
+      <dd>{{ c.officialTitle || '—' }}</dd>
+
+      <dt>友善網址</dt>
+      <dd>{{ c.friendlyUrl }}</dd>
+
+      <dt>原廠</dt>
+      <dd>{{ c.partner?.name }}</dd>
+
+      <dt>課程群組</dt>
+      <dd>
+        @if (c.courseGroup) {
+          {{ c.courseGroup.description }}
+        } @else {
+          <span class="text-muted">—</span>
+        }
+      </dd>
+
+      <dt>上架狀態</dt>
+      <dd>{{ c.publishStatus?.description }}</dd>
+
+      <dt>上架日期</dt>
+      <dd>{{ c.scheduleOn }}</dd>
+
+      <dt>下架日期</dt>
+      <dd>{{ c.scheduleOff }}</dd>
+
+      <dt>時數</dt>
+      <dd>{{ c.hour }}</dd>
+
+      <dt>定價</dt>
+      <dd>{{ c.listPrice }}</dd>
+
+      <dt>點數</dt>
+      <dd>{{ c.learningCredit }}</dd>
+
+      <dt>允許重聽</dt>
+      <dd>
+        @if (c.canRepeat) {
+          <p-tag value="是" severity="success" />
+        } @else {
+          <p-tag value="否" severity="secondary" />
+        }
+      </dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">課程內容</h2>
+
+    <dl class="detail-grid">
+      <dt>教材</dt>
+      <dd>{{ c.material || '—' }}</dd>
+
+      <dt>課程目標</dt>
+      <dd class="detail-text">{{ c.objective || '—' }}</dd>
+
+      <dt>適合對象</dt>
+      <dd class="detail-text">{{ c.target || '—' }}</dd>
+
+      <dt>先備知識</dt>
+      <dd class="detail-text">{{ c.prerequisites || '—' }}</dd>
+
+      <dt>課程大綱</dt>
+      <dd class="detail-text">{{ c.outline || '—' }}</dd>
+
+      <dt>考試／認證說明</dt>
+      <dd class="detail-text">{{ c.towardCertOrExam || '—' }}</dd>
+
+      <dt>備註</dt>
+      <dd class="detail-text">{{ c.note || '—' }}</dd>
+
+      <dt>其他資訊</dt>
+      <dd class="detail-text">{{ c.otherInfo || '—' }}</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">關聯資料</h2>
+
+    <dl class="detail-grid">
+      <dt>課程問答數</dt>
+      <dd>{{ c.courseFaqCount }}</dd>
+
+      <dt>認證關聯數</dt>
+      <dd>{{ c.certificationCount }}</dd>
+
+      <dt>職類關聯數</dt>
+      <dd>{{ c.jobCategoryCount }}</dd>
+
+      <dt>相關連結數</dt>
+      <dd>{{ c.relatedLinkCount }}</dd>
+
+      <dt>熱門課程數</dt>
+      <dd>{{ c.hotCourseCount }}</dd>
+
+      <dt>推薦課程數</dt>
+      <dd>{{ c.recommCount }}</dd>
+    </dl>
+
+    @if (referenceCount() > 0) {
+      <p class="usage-note">
+        此課程仍被 {{ referenceCount() }} 筆資料引用，無法刪除。
+      </p>
+    }
+  </div>
+} @else if (loading()) {
+  <div class="card">載入中…</div>
+}

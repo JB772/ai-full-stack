@@ -1,0 +1,54 @@
+<div class="page-toolbar">
+  <div class="page-title">
+    <h1>檢視使用者</h1>
+    @if (user()) {
+      <span class="page-subtitle">{{ user()!.userId }}</span>
+    }
+  </div>
+
+  <div class="page-actions">
+    <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" routerLink="/app-users" />
+    <p-button
+      label="重設密碼"
+      icon="pi pi-key"
+      severity="warn"
+      [loading]="resetting()"
+      [disabled]="!user()"
+      (onClick)="confirmResetPassword()" />
+    <p-button label="編輯" icon="pi pi-pencil" (onClick)="edit()" [disabled]="!user()" />
+  </div>
+</div>
+
+@if (user(); as u) {
+  <div class="card">
+    <h2 class="card-title">使用者資料</h2>
+
+    <dl class="detail-grid">
+      <dt>主代碼</dt>
+      <dd>{{ u.pkid }}</dd>
+
+      <dt>帳號</dt>
+      <dd>{{ u.userId }}</dd>
+
+      <dt>使用者名稱</dt>
+      <dd>{{ u.userName }}</dd>
+
+      <dt>啟用</dt>
+      <dd>
+        @if (u.isActive) {
+          <p-tag value="啟用" severity="success" />
+        } @else {
+          <p-tag value="停用" severity="secondary" />
+        }
+      </dd>
+
+      <dt>密碼更新時間</dt>
+      <dd>{{ u.passwordUpdatedTime ? (u.passwordUpdatedTime + 'Z' | date: 'yyyy-MM-dd HH:mm') : '—' }}</dd>
+
+      <dt>角色數</dt>
+      <dd>{{ u.roleCount }}</dd>
+    </dl>
+  </div>
+} @else if (loading()) {
+  <div class="card">載入中…</div>
+}

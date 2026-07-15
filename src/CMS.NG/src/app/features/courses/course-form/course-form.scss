@@ -1,0 +1,34 @@
+/* Basic-data section lays out as two columns on wide screens; content section stays full width. */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 1.5rem;
+}
+
+@media (max-width: 720px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  label {
+    margin: 0;
+  }
+}
+
+.field-hint {
+  display: block;
+  color: var(--p-text-muted-color);
+  font-size: 0.78rem;
+  margin-top: 0.25rem;
+}
+
+:host ::ng-deep .w-full,
+:host ::ng-deep .w-full input {
+  width: 100%;
+}

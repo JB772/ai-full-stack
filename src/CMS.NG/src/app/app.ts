@@ -35,6 +35,7 @@ export class App {
       expanded: true,
       items: [
         { label: '角色 AppRole', icon: 'pi pi-id-card', route: '/app-roles' },
+        { label: '使用者 AppUser', icon: 'pi pi-users', route: '/app-users' },
         { label: '發布狀態 PublishStatus', icon: 'pi pi-flag', route: '/publish-statuses' }
       ]
     },
@@ -43,6 +44,7 @@ export class App {
       icon: 'pi pi-book',
       expanded: true,
       items: [
+        { label: '課程 Course', icon: 'pi pi-book', route: '/courses' },
         { label: '合作夥伴 Partner', icon: 'pi pi-building', route: '/partners' },
         { label: '課程群組 CourseGroup', icon: 'pi pi-sitemap', route: '/course-groups' }
       ]

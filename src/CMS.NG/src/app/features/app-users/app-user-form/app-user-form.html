@@ -1,0 +1,42 @@
+<form [formGroup]="form" (ngSubmit)="save()">
+  <div class="page-toolbar">
+    <div class="page-title">
+      <h1>{{ isEdit() ? '編輯使用者' : '新增使用者' }}</h1>
+    </div>
+
+    <div class="page-actions">
+      <p-button label="取消" icon="pi pi-times" severity="secondary" type="button" (onClick)="cancel()" />
+      <p-button label="儲存" icon="pi pi-check" severity="success" type="submit" [loading]="saving()" />
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">使用者資料</h2>
+
+    <div class="field">
+      <label for="userId">帳號<span class="required-mark">*</span></label>
+      <input id="userId" pInputText class="w-full" formControlName="userId" maxlength="200" />
+      @if (isEdit()) {
+        <small class="field-hint">帳號建立後不可修改。</small>
+      } @else {
+        <small class="field-hint">新帳號的密碼會自動設為系統預設值。</small>
+      }
+      @if (isInvalid('userId')) {
+        <div class="field-error">帳號為必填，且長度不可超過 200 字。</div>
+      }
+    </div>
+
+    <div class="field">
+      <label for="userName">使用者名稱<span class="required-mark">*</span></label>
+      <input id="userName" pInputText class="w-full" formControlName="userName" maxlength="200" />
+      @if (isInvalid('userName')) {
+        <div class="field-error">使用者名稱為必填，且長度不可超過 200 字。</div>
+      }
+    </div>
+
+    <div class="field field-checkbox">
+      <p-checkbox inputId="isActive" formControlName="isActive" [binary]="true" />
+      <label for="isActive">啟用</label>
+    </div>
+  </div>
+</form>

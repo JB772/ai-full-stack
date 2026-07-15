@@ -27,6 +27,30 @@ export const routes: Routes = [
     title: '編輯角色'
   },
   {
+    path: 'app-users',
+    loadComponent: () =>
+      import('./features/app-users/app-user-list/app-user-list').then(m => m.AppUserList),
+    title: '使用者 AppUser'
+  },
+  {
+    path: 'app-users/new',
+    loadComponent: () =>
+      import('./features/app-users/app-user-form/app-user-form').then(m => m.AppUserForm),
+    title: '新增使用者'
+  },
+  {
+    path: 'app-users/:id',
+    loadComponent: () =>
+      import('./features/app-users/app-user-detail/app-user-detail').then(m => m.AppUserDetail),
+    title: '檢視使用者'
+  },
+  {
+    path: 'app-users/:id/edit',
+    loadComponent: () =>
+      import('./features/app-users/app-user-form/app-user-form').then(m => m.AppUserForm),
+    title: '編輯使用者'
+  },
+  {
     path: 'publish-statuses',
     loadComponent: () =>
       import('./features/publish-statuses/publish-status-list/publish-status-list').then(m => m.PublishStatusList),
@@ -97,6 +121,30 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/course-groups/course-group-form/course-group-form').then(m => m.CourseGroupForm),
     title: '編輯課程群組'
+  },
+  {
+    path: 'courses',
+    loadComponent: () =>
+      import('./features/courses/course-list/course-list').then(m => m.CourseList),
+    title: '課程 Course'
+  },
+  {
+    path: 'courses/new',
+    loadComponent: () =>
+      import('./features/courses/course-form/course-form').then(m => m.CourseForm),
+    title: '新增課程'
+  },
+  {
+    path: 'courses/:id',
+    loadComponent: () =>
+      import('./features/courses/course-detail/course-detail').then(m => m.CourseDetail),
+    title: '檢視課程'
+  },
+  {
+    path: 'courses/:id/edit',
+    loadComponent: () =>
+      import('./features/courses/course-form/course-form').then(m => m.CourseForm),
+    title: '編輯課程'
   },
   { path: '**', redirectTo: 'app-roles' }
 ];

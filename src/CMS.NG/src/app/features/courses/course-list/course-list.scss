@@ -1,0 +1,35 @@
+.row-actions {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-muted {
+  color: var(--p-text-muted-color);
+}
+
+.empty-row {
+  text-align: center;
+  padding: 2rem 0;
+  color: var(--p-text-muted-color);
+}
+
+.drawer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+/* 15 columns overflow narrow viewports — let the table scroll horizontally inside the card. */
+.card {
+  overflow-x: auto;
+}
+
+:host ::ng-deep .w-full,
+:host ::ng-deep .w-full input {
+  width: 100%;
+}

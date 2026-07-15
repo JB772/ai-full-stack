@@ -12,10 +12,11 @@ a table's shape before writing code against it.
 |------|------|
 | `database/*.sql` | The schema (auth, admin, course, promotion). Reference only — already deployed. |
 | `spec/code-gen.convention.md` | **The** code-generation convention. Read it before adding any feature. |
-| `spec/sample1.spec.md`, `sample2.spec.md` | Worked examples of a feature spec (Course, SkillTrain). Aspirational — see the RowAudit gotcha. |
+| `spec/sample1.spec.md`, `sample2.spec.md` | Worked examples of a feature spec (Course, SkillTrain). **Aspirational** — see the RowAudit gotcha. `sample1` is a much richer Course than what shipped; the real, built spec is `spec/course/Course.md`. Don't conflate them. |
 | `spec/feature-spec.template.md` | Template for new feature specs. |
-| `spec/{sub-system}/{Table}.md` | Generated feature specs (e.g. `spec/admin/PublishStatus.md`). |
+| `spec/{sub-system}/{Table}.md` | Generated feature specs (e.g. `spec/admin/PublishStatus.md`, `spec/course/Course.md`). |
 | `spec/ui-sample-*.png` | UI style reference only — not actual content. |
+| `docs/*.md` | Deep-dive gotcha references (PK shapes, delete guards, nav objects, schema/test traps). Read the relevant one before working in that area — see the pointer table under **Gotchas**. |
 | `src/CMS.API` | .NET 9 Web API, Dapper, Swagger. Port 5000. |
 | `src/CMS.API.Tests` | xUnit. |
 | `src/CMS.NG` | Angular 20 standalone + PrimeNG 20. Port 4200. |
@@ -62,109 +63,61 @@ directly, and the API's CORS policy allows any localhost origin.
 
 ## Gotchas
 
-- **`AppRole.RoleId` is immutable.** The table has a `pkid` IDENTITY column *and* a clustered PK on
-  `RoleId`, which `AppUserRole` foreign-keys to. `pkid` is the API identifier; `RoleId` is never
-  written by the UPDATE statement and the edit form disables the field. Expect this shape on other
-  auth tables (`AppUser.UserId`).
-- **Not every PK is an IDENTITY.** `PublishStatus.pkid` is a `tinyint` with no IDENTITY, so the *user*
-  supplies the key. Consequences, all of which `PublishStatusRepository` / `PublishStatusesController`
-  already handle — copy them for any other table shaped this way:
-  - INSERT writes `pkid` explicitly; there is no `SELECT CAST(SCOPE_IDENTITY() AS int)`, and
-    `CreateAsync` echoes the caller's pkid back.
-  - Create must check for a duplicate pkid and return **409** — otherwise SQL Server throws a raw PK
-    violation.
-  - **No `pkid <= 0` → 400 guard on PUT** (the one `AppRole` uses). `0` is a legal `tinyint` key and a
-    C# `byte` defaults to `0`, so "absent" and "zero" are indistinguishable. An unknown pkid is a 404.
-  - Route is `{id:int}` — ASP.NET has no `:byte` constraint — and the controller range-checks 0–255
-    before casting, so `/api/publish-statuses/999` is a clean 404 rather than a 500.
-  - The form makes `pkid` editable on add and `disable()`s it on edit (same as `AppRole.RoleId`).
-- **…and not every IDENTITY is an `int`.** `Partner.pkid` and `CourseGroup.pkid` are `smallint
-  IDENTITY` → C# `short`. Check the column type, not just whether it says IDENTITY:
-  - `SELECT CAST(SCOPE_IDENTITY() AS smallint)` and `ExecuteScalarAsync<short>`, not `int`.
-  - Route stays `{id:int}` (ASP.NET has no `:short` constraint) and the controller range-checks
-    against `short.MinValue`/`short.MaxValue` before casting, so `/api/partners/99999` is a clean 404
-    rather than an overflow. Same shape as `PublishStatusesController.TryToPkid`.
-  - The pkid is DB-generated, so the form has **no `pkid` control at all** — unknown on add, immutable
-    on edit. This is the opposite of `PublishStatus`, whose form *does* expose it. Don't pattern-match
-    the wrong reference.
-- **Deletes that would orphan children return 409**, not a FK exception — check the child count first.
-  Prefer a correlated-subquery count on the response model (`PublishStatus.CourseCount`) and read the
-  guard off the entity the controller already loaded for its 404 — no second round trip.
-  - A parent can have *several* child tables (`Partner` has five). Count them all, and have the 409
-    message name only the ones that actually have rows — see `PartnersController.DescribeBlockers`.
-  - **Guard on what would be orphaned, not on what SQL Server would reject.** `Seminar.Partner_pkid`
-    points at `Partner` but the schema declares **no FK constraint** for it, so a delete would silently
-    orphan those rows. `SeminarCount` is in the guard anyway. Grep for `{Table}_pkid` columns, not just
-    for `FOREIGN KEY` clauses.
-  - **Some FKs are `ON DELETE CASCADE` — there the guard is the *only* protection.** Elsewhere the 409 is
-    a readability upgrade: the DB would have rejected the delete anyway and the guard just turns a raw FK
-    violation into a sentence. Not so for `FK_Course_CourseGroup` (and `FK_CourseInCertification_Course`,
-    `FK_CourseJobCategories_Course`, `FK_CertificationJobCategories_Certification`). `DELETE FROM
-    CourseGroup WHERE pkid = 2` **succeeds**, silently destroying every `Course` in the group and then
-    cascading on into *their* children. `CourseGroupsController.Delete` checks `CourseCount` before the
-    DELETE ever reaches SQL Server, and that check is load-bearing. Grep the `ALTER TABLE … ADD CONSTRAINT`
-    block for `ON DELETE CASCADE` before writing any delete path.
-- **Don't invent constraints the schema doesn't have.** `Partner.AppKey` reads like a natural key, but
-  there is no UNIQUE index on it — only `PK_Partner` on `pkid` — so the API adds **no** duplicate-AppKey
-  409, and `AppKey` is freely editable. Contrast `AppRole.RoleId`, which really is a clustered PK and
-  therefore really does get a 409 and an immutable field. Read the constraints before assuming.
-- **Two FK columns don't make a junction table.** `PartnerCourseGroup` looks like a Partner ↔ CourseGroup
-  N-N, but it also carries `DisplayOrder` and `Description nvarchar(100) NOT NULL`. A `p-multiselect`
-  emits only a list of ids, so the delete-then-reinsert sync could never supply `Description` and every
-  INSERT would fail. It is a child entity needing its own CRUD, not an N-N picker. Check for payload
-  columns before scaffolding an N-N.
-- **`nchar(n)` columns need `RTRIM()`** in every SELECT (see the convention).
-- **RowAudit is not wired up.** The `RowAudit` table exists in `admin.sql`, and the sample specs and
-  the `/crud` skill both reference a `RowAuditWriter` / `RowAuditBadgeComponent` / `AuditHelper` —
-  **none of these exist in the code.** No feature logs audit rows. Don't invent the subsystem while
-  scaffolding a table; adding it is a separate cross-cutting task.
-- **The `/crud` skill's file layout is wrong for this repo.** It says `core/models/` and
-  `core/services/`; there is no `core/` directory. Models and services live in
-  `features/{table-plural}/`, next to the components. Follow the existing code, not the skill text.
-- **A few tables are scripted into more than one `.sql` file.** `PublishStatus` appears identically in
-  `admin.sql`, `course.sql`, and `promotion.sql`; `Partner` and `PartnerCourseGroup` appear in both
-  `course.sql` and `promotion.sql`. Same table, one deployed copy — diff them before assuming which
-  file is authoritative. Note the FK constraints may be declared in only *one* of the copies, so grep
-  every file when hunting for a table's children.
+### Always-true rules (apply to almost any change)
+
+- **The database is real.** Test writes land in the live CMS database. Exercise endpoints through
+  `CMS.API.Tests` (it swaps in an in-memory repo via `WebApplicationFactory`, no SQL Server), or use a
+  throwaway row you delete.
 - **New repositories must be swapped in `CmsApiFactory`.** It removes each `I{Table}Repository` and
-  registers an in-memory fake. Miss one and the test host resolves the real Dapper repository, and
-  those tests will try to reach SQL Server.
-- **`p-table` sorts its bound array *in place*.** If a list component's default sort is anything other
-  than the order the mock data is already in, the table silently reorders the very array the spec holds a
-  reference to — and `items[1]` stops being the row you wrote down. This bites any list not sorted by
-  `pkid` (e.g. `CourseGroupList`, which defaults to `description`). In component specs return a fresh copy
-  per call (`service.query.and.callFake(() => of([{ ...a }, { ...b }]))`) and assert against named consts,
-  never `items[i]` or `tbody tr[i]` — locate rows by their text instead.
-- **Don't assert an exact Chinese sort order.** SQL Server orders `nvarchar` by the database collation;
-  an in-memory fake orders by whatever comparer you gave it (and the browser by its own locale). None of
-  the three agree — e.g. code-point order puts 資料庫 before 資訊安全, and the DB may not. An exact-sequence
-  assertion tests the fake, not the API. Assert the property that matters (the sort key is `Description`,
-  not `pkid`) and pin the fake's order only with a comment saying why it may differ in production.
-- **PrimeNG major version tracks Angular's.** Angular 20 → PrimeNG 20. Installing `primeng@latest`
-  pulls v21 and fails peer resolution.
-- **UTF-8 through the shell.** Chinese characters in a JSON body passed inline to `curl` via Bash get
-  mangled and the API rejects the request. Write the payload to a file and use `--data-binary @file`,
-  or use Swagger UI.
-- **The database is real.** Test writes land in the live CMS database. Use a throwaway row and delete
-  it, or exercise the endpoints through `CMS.API.Tests`, which swaps in an in-memory repository via
-  `WebApplicationFactory` and needs no SQL Server.
+  registers an in-memory fake; miss one and those tests hit real SQL Server.
+- **RowAudit is not wired up.** The table exists and the sample specs / `/crud` skill reference a
+  `RowAuditWriter` / `RowAuditBadgeComponent` / `AuditHelper`, but **none of these exist in the code.**
+  Don't invent the subsystem while scaffolding a table.
+- **The `/crud` skill's file layout is wrong for this repo.** It says `core/models/` + `core/services/`;
+  there is no `core/`. Models and services live in `features/{table-plural}/`. Follow the code, not the skill.
+- **`nchar(n)` columns need `RTRIM()`** in every SELECT (see the convention).
+- **Read the constraints before assuming.** A column that *reads* like a natural key may have no UNIQUE
+  index (`Partner.AppKey` — freely editable, no 409), and a two-FK table may carry payload columns and so
+  not be a junction (`PartnerCourseGroup`). The same table can appear in several `.sql` files — diff them,
+  and grep *every* file when hunting for a table's children/FKs.
+- **PrimeNG major version tracks Angular's** (20 → 20); `primeng@latest` pulls v21 and fails peer resolution.
+- **UTF-8 through the shell.** Inline Chinese JSON to `curl` gets mangled — use `--data-binary @file` or Swagger UI.
+
+### Deep reference — read the relevant file before working in that area
+
+| Doc | Read it before… |
+|-----|-----------------|
+| `docs/pk-shapes.md` | adding a table — the four PK shapes (tinyint / smallint / plain-int / int+natural-key) and `AppUser`'s backend-only `PasswordHash` (SysConfig-seeded, reset-only) |
+| `docs/delete-guards.md` | writing any DELETE — 409-not-FK guards, multi-child messages, no-FK orphans, and load-bearing `ON DELETE CASCADE` checks |
+| `docs/relationships-and-nav.md` | touching FKs or N-N — `Course` multi-map nav objects, nullable-FK `LEFT JOIN`, `forkJoin` lookups, `date` ⇄ `p-datepicker`, why N-N editors are deferred |
+| `docs/schema-and-testing.md` | reading the schema or writing tests — invented-constraint traps, multi-file `.sql`, `p-table` in-place sort, don't-assert-Chinese-sort-order |
 
 ## Adding a feature
 
-Built so far: **AppRole** (`/api/app-roles`), **PublishStatus** (`/api/publish-statuses`),
-**Partner** (`/api/partners`) and **CourseGroup** (`/api/course-groups`). Use those as the reference
-implementation — the sample specs describe a richer system than what exists. Pick the one whose PK
-matches the table you're adding:
+Built so far: **AppRole** (`/api/app-roles`), **AppUser** (`/api/app-users`),
+**PublishStatus** (`/api/publish-statuses`), **Partner** (`/api/partners`),
+**CourseGroup** (`/api/course-groups`) and **Course** (`/api/courses`).
+Use those as the reference implementation — the sample specs describe a richer system than what exists.
+Pick the one whose PK matches the table you're adding:
 
 | Reference | PK shape | Copy it when… |
 |-----------|----------|---------------|
 | `AppRole` | `int` IDENTITY + a separate immutable natural key | the table has a business key other tables FK to |
 | `PublishStatus` | `tinyint`, **no** IDENTITY | the *user* supplies the key |
 | `Partner` | `smallint` IDENTITY | the DB generates the key (the common case) |
+| `Course` | `int` IDENTITY (plain) | the table has **outbound FKs** (nav objects via multi-map) |
 
 `Partner` is also the reference for a multi-child delete guard and for a table with no outbound FKs.
 `CourseGroup` is the reference for a **cascading** FK — the case where the delete guard is the only thing
 preventing data loss — and for a single-column table (one form field, keyword-only filter; don't pad it).
+`Course` is the reference for **outbound FKs**: Dapper multi-map nav objects, a nullable-FK `LEFT JOIN`,
+FK dropdowns fed by `forkJoin` of existing feature services, and `date` ⇄ `p-datepicker` conversion.
+`AppUser` (same PK shape as `AppRole`) is the reference for a **server-managed, write-only column** — a
+secret (`PasswordHash`) that never appears in any DTO/model, is seeded from `SysConfig` on create, and
+is changed only through a dedicated bodyless reset endpoint (details in `docs/pk-shapes.md`).
+
+Per-shape and per-pattern depth for all of the above lives in `docs/*.md` — see the pointer table under
+**Gotchas**.
 
 1. Read the table in `database/*.sql` and write a spec from `spec/feature-spec.template.md`,
    saved to `spec/{sub-system}/{Table}.md`. Check whether `pkid` is really an IDENTITY.
