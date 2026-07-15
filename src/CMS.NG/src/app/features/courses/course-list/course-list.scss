@@ -17,6 +17,23 @@
   color: var(--p-text-muted-color);
 }
 
+/* Inline editing: hint that a cell is editable, and make editors fill the cell. */
+.editable {
+  cursor: pointer;
+}
+
+.cell-error {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--p-red-500);
+  font-size: 0.75rem;
+}
+
+:host ::ng-deep .cell-editor,
+:host ::ng-deep .cell-editor input {
+  width: 100%;
+}
+
 .drawer-actions {
   display: flex;
   justify-content: flex-end;
