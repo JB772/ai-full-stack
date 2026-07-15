@@ -19,7 +19,7 @@ public class FeaturedPromoItemsControllerTests : IDisposable
     private readonly CmsApiFactory _factory = new();
     private readonly HttpClient _client;
 
-    public FeaturedPromoItemsControllerTests() => _client = _factory.CreateClient();
+    public FeaturedPromoItemsControllerTests() => _client = _factory.CreateAuthenticatedClient();
 
     public void Dispose()
     {

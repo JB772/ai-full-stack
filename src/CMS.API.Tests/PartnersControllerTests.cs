@@ -16,7 +16,7 @@ public class PartnersControllerTests : IDisposable
     private readonly CmsApiFactory _factory = new();
     private readonly HttpClient _client;
 
-    public PartnersControllerTests() => _client = _factory.CreateClient();
+    public PartnersControllerTests() => _client = _factory.CreateAuthenticatedClient();
 
     public void Dispose()
     {

@@ -1,8 +1,9 @@
-import { Component, signal } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Component, computed, inject, signal } from '@angular/core';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { ToastModule } from 'primeng/toast';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { AuthService } from './features/auth/auth.service';
 
 /** One expandable group in the sidebar. */
 export interface NavGroup {
@@ -25,8 +26,14 @@ export interface NavItem {
   styleUrl: './app.scss'
 })
 export class App {
+  protected readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+
   protected readonly title = signal('UWA');
   protected readonly collapsed = signal(false);
+
+  /** The "系統管理 Admin" group only means anything to Admins; hide it from everyone else. */
+  private static readonly ADMIN_GROUP_LABEL = '系統管理 Admin';
 
   protected readonly navGroups = signal<NavGroup[]>([
     {
@@ -59,6 +66,11 @@ export class App {
     }
   ]);
 
+  /** Nav groups the current user may see — the Admin group is filtered out unless roles include "Admin". */
+  protected readonly visibleNavGroups = computed(() =>
+    this.navGroups().filter(g => g.label !== App.ADMIN_GROUP_LABEL || this.auth.isAdmin())
+  );
+
   protected toggleSidebar(): void {
     this.collapsed.update(v => !v);
   }
@@ -67,5 +79,10 @@ export class App {
     this.navGroups.update(groups =>
       groups.map(g => (g.label === group.label ? { ...g, expanded: !g.expanded } : g))
     );
+  }
+
+  protected logout(): void {
+    this.auth.logout();
+    this.router.navigate(['/login']);
   }
 }

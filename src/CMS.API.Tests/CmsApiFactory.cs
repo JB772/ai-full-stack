@@ -1,4 +1,6 @@
+using System.Net.Http.Headers;
 using CMS.API.Repositories;
+using CMS.API.Security;
 using CMS.API.Tests.Fakes;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Hosting;
@@ -46,5 +48,28 @@ public class CmsApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<IPromotionRepository>();
             services.AddSingleton<IPromotionRepository, InMemoryPromotionRepository>();
         });
+    }
+
+    /// <summary>
+    /// A client whose every request carries a valid Bearer token — the default for exercising the
+    /// now-protected feature endpoints. The token is signed with the same in-memory signing key the
+    /// running app validates against, so it authenticates for real (no auth bypass).
+    /// </summary>
+    public HttpClient CreateAuthenticatedClient(string userId = "admin", string userName = "系統管理員", params string[] roles)
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateToken(userId, userName, roles));
+        return client;
+    }
+
+    /// <summary>Issues a JWT via the real <see cref="IJwtTokenService"/> and in-memory signing key.</summary>
+    public string CreateToken(string userId = "admin", string userName = "系統管理員", params string[] roles)
+    {
+        using var scope = Services.CreateScope();
+        var tokenService = scope.ServiceProvider.GetRequiredService<IJwtTokenService>();
+        var authRepository = scope.ServiceProvider.GetRequiredService<IAuthRepository>();
+        var signingKey = authRepository.GetSigningKeyAsync().GetAwaiter().GetResult();
+        var effectiveRoles = roles.Length > 0 ? roles : ["Admin"];
+        return tokenService.CreateToken(userId, userName, effectiveRoles, signingKey);
     }
 }

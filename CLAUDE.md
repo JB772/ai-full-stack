@@ -47,13 +47,17 @@ lock, headless Chrome, UTF-8 curl) → **`docs/environment.md`**.
 + Dapper implementation; `Controllers/{TablePlural}Controller.cs`. Routes are kebab-case
 (`/api/app-roles`). `PUT` takes the pkid **from the body**, never a route param. Repositories take
 `IDbConnectionFactory` and open a connection per call — Dapper only, no EF.
-`DateOnly`/`TimeOnly` Dapper type handlers are registered in `Program.cs`.
+`DateOnly`/`TimeOnly` Dapper type handlers are registered in `Program.cs`. **All endpoints require a
+JWT bearer token** (global `FallbackPolicy`); only `AuthController` is `[AllowAnonymous]` — see the auth
+gotchas below.
 
 **Frontend.** Per table: `features/{table-plural}/{table}-list|-detail|-form/` plus
 `{table}.model.ts` and `{table}.service.ts`. Standalone components, lazy-loaded in `app.routes.ts`.
 List pages use `p-table` (sortable, paginated) with a `p-drawer` filter, and persist state to
 session storage under `{table}-list-filters` / `-sort` / `-page`. Forms use Reactive Forms.
-Sidebar entries live in `app.ts` (`navGroups`) and render via `app.html`.
+Sidebar entries live in `app.ts` (`navGroups`) and render via `app.html`. Feature routes are children of
+a token-guarded pathless parent (`authGuard`), and every request carries a bearer token via
+`authInterceptor` — the auth plumbing lives in `features/auth/` (see the auth gotchas below).
 
 **API base URL** comes from `environment.ts` / `environment.development.ts` (aliases `@env/*`,
 `@app/*`). There is **no dev-server proxy** — the frontend calls `http://localhost:5000/api`
@@ -92,6 +96,26 @@ directly, and the API's CORS policy allows any localhost origin.
   default-password path, the **live SysConfig key lookup is not covered by `dotnet test`** — the
   `InMemoryAuthRepository` fake (swapped into `CmsApiFactory`) supplies a known ≥32-char key; verify the
   real Dapper path via Swagger against a DB whose `appConfig` row has `symmetricSecurityKey`.
+- **Authorization is global: every endpoint requires a valid Bearer token except `AuthController`.**
+  `Program.cs` sets a `FallbackPolicy` (`RequireAuthenticatedUser`) + `AddJwtBearer`; only
+  `AuthController` carries `[AllowAnonymous]`. The bearer signing key is resolved at runtime by
+  `JwtSigningKeyProvider` (a singleton that reads the same `symmetricSecurityKey` via `IAuthRepository`
+  and caches it) and fed to `TokenValidationParameters.IssuerSigningKeyResolver`; validation uses
+  `MapInboundClaims = false` + `RoleClaimType = "role"`, no issuer/audience. **Consequence for tests:**
+  a plain `_factory.CreateClient()` now gets **401** on any feature endpoint — new controller tests must
+  use **`_factory.CreateAuthenticatedClient()`** (or `CreateToken(...)`), the helpers on `CmsApiFactory`
+  that mint a real signed token. Only `AuthControllerTests` / the unauthenticated-path cases in
+  `AuthorizationTests` use a bare client on purpose.
+- **Frontend auth lives in `features/auth/` (no `core/`).** `AuthService` stores the profile
+  (`userId` / `userName` / `accessToken` / `roles`) in **session** storage under `auth-profile`; roles
+  are **decoded from the JWT `role` claim**, never fetched separately. `authInterceptor` attaches
+  `Authorization: Bearer <token>` and, on any **401**, clears the session and routes to `/login`.
+  `authGuard` (a `CanActivateChildFn` on a pathless parent route wrapping every feature route) redirects
+  to the public `/login` when there's no token. The `App` shell renders the sidebar only when
+  authenticated (login is full-screen), shows the signed-in `userName` + a logout control, and **hides
+  the `系統管理 Admin` nav group unless `roles` includes `Admin`** (via an `isAdmin` computed). When
+  seeding a signed-in session in a spec, write the `auth-profile` JSON to `sessionStorage` before
+  creating the component (see `app.spec.ts`).
 - **PrimeNG major version tracks Angular's** (20 → 20); `primeng@latest` pulls v21 and fails peer resolution.
 - **QR codes use the framework-agnostic `qrcode` package, not `angularx-qrcode`** — it has no Angular
   peer dep and returns a PNG data URL, which doubles as the `<img [src]>` and the download payload
@@ -147,11 +171,13 @@ its row in `docs/reference-features.md` for the secondary patterns it demonstrat
    `spec/{sub-system}/{Table}.md`. Confirm whether `pkid` is really an IDENTITY.
 2. Backend: model trio → repository → controller → register in `Program.cs` (+ a `/api/lookups/{plural}`
    endpoint if the table is an FK target — a lookup-only target needs no full feature).
-3. Frontend: model → service → list / detail / form → route (`/new` before `/:id`) → sidebar entry in
+3. Frontend: model → service → list / detail / form → route (`/new` before `/:id`, added under the
+   token-guarded pathless parent in `app.routes.ts`, **not** at the top level) → sidebar entry in
    `app.ts` (`app.html` renders nav groups generically). A custom UI can collapse this to one component
    on a single route (see `FeaturedPromoItem` in `docs/reference-features.md`).
-4. Tests both sides: xUnit endpoints (list/filter, view, add, edit, delete-guard) + an in-memory fake
-   swapped into `CmsApiFactory`; Karma for the components and the service.
+4. Tests both sides: xUnit endpoints (list/filter, view, add, edit, delete-guard) driven through
+   `CmsApiFactory.CreateAuthenticatedClient()` — a bare `CreateClient()` now 401s — plus an in-memory
+   fake swapped into `CmsApiFactory`; Karma for the components and the service.
 
 The `/crud` skill automates steps 1–4, but it assumes a `core/` layout and a RowAudit subsystem this
 repo lacks — follow the code and the always-true rules above.

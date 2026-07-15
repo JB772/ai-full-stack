@@ -1,6 +1,7 @@
 using CMS.API.Models;
 using CMS.API.Repositories;
 using CMS.API.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CMS.API.Controllers;
@@ -8,6 +9,7 @@ namespace CMS.API.Controllers;
 [ApiController]
 [Route("api/auth")]
 [Produces("application/json")]
+[AllowAnonymous] // login must be reachable without a token; every other controller requires auth (see Program.cs FallbackPolicy)
 public class AuthController(IAuthRepository repository, IJwtTokenService tokenService) : ControllerBase
 {
     /// <summary>登入。驗證帳密後回傳含 JWT 的使用者資訊；任何一項不符皆回傳通用 401。</summary>
