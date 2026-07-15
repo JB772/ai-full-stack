@@ -114,6 +114,8 @@ directly, and the API's CORS policy allows any localhost origin.
 | `docs/delete-guards.md` | writing any DELETE — 409-not-FK guards, multi-child messages, no-FK orphans, and load-bearing `ON DELETE CASCADE` checks |
 | `docs/relationships-and-nav.md` | touching FKs or N-N — `Course` multi-map nav objects, nullable-FK `LEFT JOIN`, `forkJoin` lookups, `date` ⇄ `p-datepicker`, why N-N editors are deferred |
 | `docs/reference-features.md` | adding a feature — the *secondary* pattern each built feature is the reference for (multi-child & cascading delete guards, multi-map nav, write-only column, custom scheduler UI, lookup-only FK targets) and the reusable frontend UI patterns (sticky toolbar, QR codes, in-place cell editing / overlay-editor blur trap) |
+| `docs/reference-features.md` | adding a feature — the *secondary* pattern each built feature is the reference for (multi-child & cascading delete guards, multi-map nav, write-only column, custom scheduler UI, lookup-only FK targets) |
+| `docs/ui-patterns.md` | building a frontend page — sticky action toolbar, QR download, inline list-cell editing, overlay-editor (`p-select`/`p-datepicker`) blur trap |
 | `docs/schema-and-testing.md` | reading the schema or writing tests — invented-constraint traps, multi-file `.sql`, `p-table` in-place sort, don't-assert-Chinese-sort-order |
 | `docs/environment.md` | a Windows/PowerShell dev trap — Node PATH, `.ps1` execution policy, the `dotnet test` file lock, headless Chrome, UTF-8 curl |
 

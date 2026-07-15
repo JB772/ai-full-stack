@@ -97,6 +97,19 @@ describe('CourseDetail', () => {
     expect(text).toContain('已上架');
   });
 
+  it('pins the action toolbar to the top of the page', async () => {
+    await setup();
+    fixture.detectChanges();
+
+    const toolbar: HTMLElement = fixture.nativeElement.querySelector('.page-toolbar.sticky-toolbar');
+    expect(toolbar).withContext('action toolbar with sticky styling').toBeTruthy();
+    expect(getComputedStyle(toolbar).position).toBe('sticky');
+
+    const actions = toolbar.querySelector('.page-actions') as HTMLElement;
+    expect(actions.textContent).toContain('返回');
+    expect(actions.textContent).toContain('編輯');
+  });
+
   it('sums the child counts into a reference total', async () => {
     await setup();
     fixture.detectChanges();
