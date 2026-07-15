@@ -8,13 +8,15 @@
 
   <div class="page-actions">
     <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" routerLink="/app-users" />
-    <p-button
-      label="重設密碼"
-      icon="pi pi-key"
-      severity="warn"
-      [loading]="resetting()"
-      [disabled]="!user()"
-      (onClick)="confirmResetPassword()" />
+    @if (isAdmin()) {
+      <p-button
+        label="重設密碼"
+        icon="pi pi-key"
+        severity="warn"
+        [loading]="resetting()"
+        [disabled]="!user()"
+        (onClick)="confirmResetPassword()" />
+    }
     <p-button label="編輯" icon="pi pi-pencil" (onClick)="edit()" [disabled]="!user()" />
   </div>
 </div>

@@ -1,6 +1,11 @@
+using System.Text;
 using CMS.API.Data;
 using CMS.API.Repositories;
+using CMS.API.Security;
 using Dapper;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 // Dapper type handlers for SQL Server date / time(n) columns.
@@ -27,6 +32,20 @@ builder.Services.AddSwaggerGen(options =>
     {
         options.IncludeXmlComments(xmlPath);
     }
+
+    // Let Swagger UI send "Authorization: Bearer <token>" via the Authorize button.
+    var bearerScheme = new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "貼上登入取得的 JWT (不含 'Bearer ' 前綴)。",
+        Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+    };
+    options.AddSecurityDefinition("Bearer", bearerScheme);
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement { [bearerScheme] = [] });
 });
 
 builder.Services.AddCors(options =>
@@ -41,6 +60,9 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddSingleton<IDbConnectionFactory, SqlConnectionFactory>();
+builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
+builder.Services.AddSingleton<JwtSigningKeyProvider>();
+builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IAppRoleRepository, AppRoleRepository>();
 builder.Services.AddScoped<IAppUserRepository, AppUserRepository>();
 builder.Services.AddScoped<IPublishStatusRepository, PublishStatusRepository>();
@@ -50,6 +72,37 @@ builder.Services.AddScoped<ICourseRepository, CourseRepository>();
 builder.Services.AddScoped<IFeaturedPromoItemRepository, FeaturedPromoItemRepository>();
 builder.Services.AddScoped<ITrainingCenterRepository, TrainingCenterRepository>();
 builder.Services.AddScoped<IPromotionRepository, PromotionRepository>();
+
+// JWT bearer authentication. The signing key is the same SysConfig['appConfig'].symmetricSecurityKey
+// used to issue tokens; it is resolved at runtime (via JwtSigningKeyProvider), never hard-coded.
+// Tokens are issued with HMAC-SHA256 and carry no issuer/audience, so those checks are off.
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<JwtSigningKeyProvider>((options, signingKey) =>
+    {
+        options.MapInboundClaims = false; // keep the raw claim types (role / userId / userName)
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateIssuerSigningKey = true,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromMinutes(1),
+            NameClaimType = JwtTokenService.UserIdClaimType,
+            RoleClaimType = JwtTokenService.RoleClaimType,
+            IssuerSigningKeyResolver = (_, _, _, _) =>
+                [new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey.Get()))]
+        };
+    });
+
+// Global authorization: every endpoint requires an authenticated user unless it opts out with
+// [AllowAnonymous] (only AuthController does).
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
 
 var app = builder.Build();
 
@@ -61,6 +114,8 @@ app.UseSwaggerUI(options =>
 });
 
 app.UseCors(LocalhostCorsPolicy);
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 app.Run();

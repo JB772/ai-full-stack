@@ -22,10 +22,18 @@ FKs to. What's new is `PasswordHash`:
   `configValue` is a JSON blob → take its `defaultPassword` property), SHA-256-hashes it
   (`Security/PasswordHasher.Hash`, uppercase hex), and stores it. `PasswordUpdatedTime` stays **NULL**
   on create (default password = "not yet updated"). UPDATE touches neither column.
-- **The only write path for the hash is `POST /api/app-users/{id}/reset-password`** — no request body,
-  so the raw password never crosses the API. It re-seeds from the default and stamps
-  `PasswordUpdatedTime = SYSDATETIME()`. The frontend exposes it as a 重設密碼 button on the detail page;
-  there is no password field anywhere in the UI.
+- **Two write paths for the hash, both stamping `PasswordUpdatedTime = SYSDATETIME()`:**
+  - **Admin reset — `POST /api/auth/reset-password`** (`AuthRepository.ResetPasswordToDefaultAsync`,
+    `[Authorize(Roles = "Admin")]` → 403 for non-Admins): the body is only `{ userId }` (the target
+    account), so the raw password never crosses the API; it re-seeds from the `SysConfig` default. The
+    frontend exposes it as an **Admin-only** 重設密碼 button (gated on `AuthService.isAdmin`) on both the
+    AppUser edit form and detail page — no password field in that UI. (This replaced an earlier unguarded
+    `POST /api/app-users/{id}/reset-password`, since removed.)
+  - **Self-service change — `POST /api/auth/change-password`** (`AuthRepository.UpdatePasswordAsync`,
+    identity from the JWT): the signed-in user supplies current + new + confirm; the raw passwords are
+    hashed server-side and never returned. Complexity is enforced by `Security/PasswordPolicy`. See the
+    change-password bullet in `CLAUDE.md` for the full flow; this is the *only* place a plaintext password
+    reaches the API and gets hashed into `PasswordHash` (the reset path uses the default instead).
 - **The `SysConfig`/SHA-256 path is *not* covered by `dotnet test`.** The in-memory fake skips it (no
   `SysConfig` row; its `CreateAsync` just seeds an account), so the endpoint tests never exercise the
   default-password lookup. `PasswordHasher` is unit-tested against the canonical SHA-256("test") vector;

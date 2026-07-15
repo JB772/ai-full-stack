@@ -1,3 +1,4 @@
+import { WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -5,11 +6,13 @@ import { ConfirmationService, MessageService, Confirmation } from 'primeng/api';
 import { of, throwError } from 'rxjs';
 import { AppUserDetail } from './app-user-detail';
 import { AppUserService } from '../app-user.service';
+import { AuthService } from '../../auth/auth.service';
 import { AppUser } from '../app-user.model';
 
 describe('AppUserDetail', () => {
   let fixture: ComponentFixture<AppUserDetail>;
   let service: jasmine.SpyObj<AppUserService>;
+  let auth: { isAdmin: WritableSignal<boolean>; resetPasswordToDefault: jasmine.Spy };
   let confirmationService: ConfirmationService;
   let router: Router;
 
@@ -22,10 +25,13 @@ describe('AppUserDetail', () => {
     roleCount: 2
   };
 
-  async function setup(id = '1') {
-    service = jasmine.createSpyObj<AppUserService>('AppUserService', ['getByPkid', 'resetPassword']);
+  async function setup(id = '1', isAdmin = true) {
+    service = jasmine.createSpyObj<AppUserService>('AppUserService', ['getByPkid']);
     service.getByPkid.and.returnValue(of(admin));
-    service.resetPassword.and.returnValue(of(void 0));
+    auth = {
+      isAdmin: signal(isAdmin),
+      resetPasswordToDefault: jasmine.createSpy('resetPasswordToDefault').and.returnValue(of(void 0))
+    };
 
     await TestBed.configureTestingModule({
       imports: [AppUserDetail],
@@ -35,6 +41,7 @@ describe('AppUserDetail', () => {
         MessageService,
         ConfirmationService,
         { provide: AppUserService, useValue: service },
+        { provide: AuthService, useValue: auth },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map([['id', id]]) } } }
       ]
     }).compileComponents();
@@ -76,7 +83,21 @@ describe('AppUserDetail', () => {
     expect(navigate).toHaveBeenCalledWith(['/app-users', 1, 'edit']);
   });
 
-  it('resets the password after confirmation and reloads', async () => {
+  it('shows the reset-password button for Admins', async () => {
+    await setup('1', true);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('重設密碼');
+  });
+
+  it('hides the reset-password button for non-Admins', async () => {
+    await setup('1', false);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain('重設密碼');
+  });
+
+  it('resets the password (by userId) after confirmation and reloads', async () => {
     await setup();
     spyOn(confirmationService, 'confirm').and.callFake((c: Confirmation) => {
       c.accept?.();
@@ -88,7 +109,7 @@ describe('AppUserDetail', () => {
 
     api().confirmResetPassword();
 
-    expect(service.resetPassword).toHaveBeenCalledWith(1);
+    expect(auth.resetPasswordToDefault).toHaveBeenCalledWith('admin');
     // once on init + once on reload after reset.
     expect(service.getByPkid).toHaveBeenCalledTimes(2);
     expect(messageService.add).toHaveBeenCalledWith(jasmine.objectContaining({ severity: 'success' }));
@@ -100,7 +121,7 @@ describe('AppUserDetail', () => {
       c.accept?.();
       return confirmationService;
     });
-    service.resetPassword.and.returnValue(throwError(() => ({ error: { message: '重設密碼時發生錯誤。' } })));
+    auth.resetPasswordToDefault.and.returnValue(throwError(() => ({ error: { message: '重設密碼時發生錯誤。' } })));
     const messageService = TestBed.inject(MessageService);
     spyOn(messageService, 'add');
     fixture.detectChanges();

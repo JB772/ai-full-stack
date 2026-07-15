@@ -16,7 +16,7 @@ a table's shape before writing code against it.
 | `spec/feature-spec.template.md` | Template for new feature specs. |
 | `spec/{sub-system}/{Table}.md` | Generated feature specs (e.g. `spec/admin/PublishStatus.md`, `spec/course/Course.md`). |
 | `spec/ui-sample-*.png` | UI style reference only — not actual content. |
-| `docs/*.md` | Deep-dive references (PK shapes, delete guards, nav objects, schema/test traps, per-feature reference patterns, env traps). Read the relevant one before working in that area — see the pointer table under **Gotchas**. |
+| `docs/*.md` | Deep-dive references (auth, PK shapes, delete guards, nav objects, schema/test traps, per-feature reference patterns, env traps). Read the relevant one before working in that area — see the pointer table under **Gotchas**. |
 | `src/CMS.API` | .NET 9 Web API, Dapper, Swagger. Port 5000. |
 | `src/CMS.API.Tests` | xUnit. |
 | `src/CMS.NG` | Angular 20 standalone + PrimeNG 20. Port 4200. |
@@ -47,13 +47,17 @@ lock, headless Chrome, UTF-8 curl) → **`docs/environment.md`**.
 + Dapper implementation; `Controllers/{TablePlural}Controller.cs`. Routes are kebab-case
 (`/api/app-roles`). `PUT` takes the pkid **from the body**, never a route param. Repositories take
 `IDbConnectionFactory` and open a connection per call — Dapper only, no EF.
-`DateOnly`/`TimeOnly` Dapper type handlers are registered in `Program.cs`.
+`DateOnly`/`TimeOnly` Dapper type handlers are registered in `Program.cs`. **All endpoints require a
+JWT bearer token** (global `FallbackPolicy`); only `AuthController.Login` is `[AllowAnonymous]` — see the
+auth gotchas below and `docs/auth.md`.
 
 **Frontend.** Per table: `features/{table-plural}/{table}-list|-detail|-form/` plus
 `{table}.model.ts` and `{table}.service.ts`. Standalone components, lazy-loaded in `app.routes.ts`.
 List pages use `p-table` (sortable, paginated) with a `p-drawer` filter, and persist state to
 session storage under `{table}-list-filters` / `-sort` / `-page`. Forms use Reactive Forms.
-Sidebar entries live in `app.ts` (`navGroups`) and render via `app.html`.
+Sidebar entries live in `app.ts` (`navGroups`) and render via `app.html`. Feature routes are children of
+a token-guarded pathless parent (`authGuard`), and every request carries a bearer token via
+`authInterceptor` — the auth plumbing lives in `features/auth/` (see the auth gotchas below).
 
 **API base URL** comes from `environment.ts` / `environment.development.ts` (aliases `@env/*`,
 `@app/*`). There is **no dev-server proxy** — the frontend calls `http://localhost:5000/api`
@@ -78,15 +82,38 @@ directly, and the API's CORS policy allows any localhost origin.
   index (`Partner.AppKey` — freely editable, no 409), and a two-FK table may carry payload columns and so
   not be a junction (`PartnerCourseGroup`). The same table can appear in several `.sql` files — diff them,
   and grep *every* file when hunting for a table's children/FKs.
+- **Auth is wired up and authorization is global.** All auth lives in `AuthController` (`/api/auth/*`) +
+  `IAuthRepository` + `Security/*`; `POST /api/auth/login` is the **only** `[AllowAnonymous]` action —
+  every other endpoint requires a valid Bearer token (`Program.cs` `FallbackPolicy`). `AuthController` also
+  hosts authenticated `PUT /api/auth/profile`, `POST /api/auth/change-password`, and **Admin-only**
+  (`[Authorize(Roles="Admin")]` → 403) `POST /api/auth/reset-password`. `PasswordHash` is never SELECTed or
+  returned, and the live `SysConfig['appConfig']` lookups (signing key, default password) aren't covered by
+  `dotnet test`. **Consequence for tests:** a bare `_factory.CreateClient()` 401s on any feature endpoint —
+  use `CmsApiFactory.CreateAuthenticatedClient()` / `CreateToken(...)` (a bare token defaults to the
+  `Admin` role; pass an explicit role like `"Editor"` to test a role restriction). Full per-endpoint flows,
+  JWT signing/validation, `PasswordPolicy`, and the frontend auth plumbing → **`docs/auth.md`**.
+- **Frontend auth lives in `features/auth/` (no `core/`).** `AuthService` keeps the profile in **session**
+  storage under `auth-profile` (roles decoded from the JWT `role` claim); `authInterceptor` adds the bearer
+  and clears→`/login` on 401; `authGuard` wraps every feature route on a pathless parent; the `App` shell
+  **hides the `系統管理 Admin` nav group unless `roles` includes `Admin`** (`isAdmin` computed). Seed a
+  signed-in session by writing `auth-profile` to `sessionStorage` **before** creating the component (see
+  `app.spec.ts`). Detail → **`docs/auth.md`**.
 - **PrimeNG major version tracks Angular's** (20 → 20); `primeng@latest` pulls v21 and fails peer resolution.
+- **A few load-bearing frontend UI patterns live in `docs/reference-features.md` (Course), not here:** a
+  **sticky page toolbar** (`position: sticky` works because the viewport — not a fixed header — is the
+  scroll container), **QR codes** (framework-agnostic `qrcode` package, not `angularx-qrcode`), and
+  **in-place list-cell editing** (hand-rolled on `(dblclick)`, **not** `pEditableColumn`; overlay editors
+  like `p-select`/`p-datepicker` must **not** commit on blur). Read that file before reaching for any of them.
 
 ### Deep reference — read the relevant file before working in that area
 
 | Doc | Read it before… |
 |-----|-----------------|
+| `docs/auth.md` | touching login / JWT / authorization, self-service profile or password, or the Admin reset — per-endpoint flows, signing-key resolution, `PasswordPolicy`, the `CreateAuthenticatedClient` test seam, and the frontend auth plumbing |
 | `docs/pk-shapes.md` | adding a table — the four PK shapes (tinyint / smallint / plain-int / int+natural-key) and `AppUser`'s backend-only `PasswordHash` (SysConfig-seeded, reset-only) |
 | `docs/delete-guards.md` | writing any DELETE — 409-not-FK guards, multi-child messages, no-FK orphans, and load-bearing `ON DELETE CASCADE` checks |
 | `docs/relationships-and-nav.md` | touching FKs or N-N — `Course` multi-map nav objects, nullable-FK `LEFT JOIN`, `forkJoin` lookups, `date` ⇄ `p-datepicker`, why N-N editors are deferred |
+| `docs/reference-features.md` | adding a feature — the *secondary* pattern each built feature is the reference for (multi-child & cascading delete guards, multi-map nav, write-only column, custom scheduler UI, lookup-only FK targets) and the reusable frontend UI patterns (sticky toolbar, QR codes, in-place cell editing / overlay-editor blur trap) |
 | `docs/reference-features.md` | adding a feature — the *secondary* pattern each built feature is the reference for (multi-child & cascading delete guards, multi-map nav, write-only column, custom scheduler UI, lookup-only FK targets) |
 | `docs/ui-patterns.md` | building a frontend page — sticky action toolbar, QR download, inline list-cell editing, overlay-editor (`p-select`/`p-datepicker`) blur trap |
 | `docs/schema-and-testing.md` | reading the schema or writing tests — invented-constraint traps, multi-file `.sql`, `p-table` in-place sort, don't-assert-Chinese-sort-order |
@@ -111,11 +138,13 @@ its row in `docs/reference-features.md` for the secondary patterns it demonstrat
    `spec/{sub-system}/{Table}.md`. Confirm whether `pkid` is really an IDENTITY.
 2. Backend: model trio → repository → controller → register in `Program.cs` (+ a `/api/lookups/{plural}`
    endpoint if the table is an FK target — a lookup-only target needs no full feature).
-3. Frontend: model → service → list / detail / form → route (`/new` before `/:id`) → sidebar entry in
+3. Frontend: model → service → list / detail / form → route (`/new` before `/:id`, added under the
+   token-guarded pathless parent in `app.routes.ts`, **not** at the top level) → sidebar entry in
    `app.ts` (`app.html` renders nav groups generically). A custom UI can collapse this to one component
    on a single route (see `FeaturedPromoItem` in `docs/reference-features.md`).
-4. Tests both sides: xUnit endpoints (list/filter, view, add, edit, delete-guard) + an in-memory fake
-   swapped into `CmsApiFactory`; Karma for the components and the service.
+4. Tests both sides: xUnit endpoints (list/filter, view, add, edit, delete-guard) driven through
+   `CmsApiFactory.CreateAuthenticatedClient()` — a bare `CreateClient()` now 401s — plus an in-memory
+   fake swapped into `CmsApiFactory`; Karma for the components and the service.
 
 The `/crud` skill automates steps 1–4, but it assumes a `core/` layout and a RowAudit subsystem this
 repo lacks — follow the code and the always-true rules above.

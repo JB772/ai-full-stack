@@ -92,14 +92,4 @@ public class AppUsersController(IAppUserRepository repository) : ControllerBase
         await repository.DeleteAsync(id);
         return NoContent();
     }
-
-    /// <summary>將使用者密碼重設為系統預設值 (不需傳入任何密碼)。</summary>
-    [HttpPost("{id:int}/reset-password")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> ResetPassword(int id)
-    {
-        var reset = await repository.ResetPasswordAsync(id);
-        return reset ? NoContent() : NotFound();
-    }
 }

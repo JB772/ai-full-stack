@@ -12,7 +12,4 @@ public interface IAppUserRepository
     Task<bool> UpdateAsync(AppUserRequest request);
     Task<bool> DeleteAsync(int pkid);
     Task<int> GetRoleCountAsync(int pkid);
-
-    /// <summary>將密碼重設為 SysConfig 中的預設密碼並更新 PasswordUpdatedTime。找不到使用者回傳 false。</summary>
-    Task<bool> ResetPasswordAsync(int pkid);
 }
