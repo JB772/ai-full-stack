@@ -92,6 +92,16 @@ directly, and the API's CORS policy allows any localhost origin.
   `--p-content-background` keeps scrolling fields from showing through. `course-form` does this via a
   `sticky-toolbar` class on both New and Edit (one component serves both). Assert it in a headless
   Karma run with `getComputedStyle(el).position === 'sticky'`.
+- **In-place list editing is hand-rolled, not `pEditableColumn`.** The `course-list` cell editor is a
+  component-managed edit-state (`editing` signal) driven by `(dblclick)`, because PrimeNG's
+  `pEditableColumn` opens on **single** click and the requirement was double-click only. Don't reach for
+  `pEditableColumn`/`p-cellEditor` here. See the Course row in `docs/reference-features.md`.
+- **Overlay editors (`p-select`, `p-datepicker`) must NOT commit on blur.** Their panels are
+  `appendTo="body"`, so a blur-to-save fires the instant you click an option / a date — tearing the editor
+  down before the pick lands, so the control looks like it "won't edit". The `p-select` commits on
+  `(onChange)` (+ `(onHide)` to close on click-away); the `p-datepicker` on `(onSelect)` + `(onClose)`.
+  Only plain text/number inputs are safe to commit on `(blur)`. See the Course row in
+  `docs/reference-features.md`.
 
 ### Deep reference — read the relevant file before working in that area
 
@@ -116,7 +126,7 @@ its row in `docs/reference-features.md` for the secondary patterns it demonstrat
 | `AppRole` | `int` IDENTITY + a separate immutable natural key | the table has a business key other tables FK to |
 | `PublishStatus` | `tinyint`, **no** IDENTITY | the *user* supplies the key |
 | `Partner` | `smallint` IDENTITY | the DB generates the key (the common case) |
-| `Course` | `int` IDENTITY (plain) | the table has **outbound FKs** (nav objects via multi-map) |
+| `Course` | `int` IDENTITY (plain) | the table has **outbound FKs** (nav objects via multi-map), or you want **in-place cell editing** on a list page |
 | `FeaturedPromoItem` | `int` IDENTITY (plain) | the UI is **not** the list/detail/form triad, or you need a multi-column UNIQUE 409 / a positional swap |
 
 1. Read the table in `database/*.sql`; write a spec from `spec/feature-spec.template.md` to

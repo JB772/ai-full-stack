@@ -26,6 +26,35 @@ Read the row for the pattern you're about to build.
 - `date` ⇄ `p-datepicker` conversion using **local** components — never `toISOString()`.
 - Detail in `docs/relationships-and-nav.md`.
 
+### In-place (inline) cell editing on the list page
+
+The `course-list` table edits cells in place — the reference for adding inline editing to any list.
+
+- **Double-click to edit, not `pEditableColumn`.** Editors are rendered by a single `editing` signal
+  (`{ pkid, field, value, error }`); each editable `<td>` binds `(dblclick)="startEdit(course, field)"`.
+  PrimeNG's `pEditableColumn` opens on single click, so it's deliberately **not** used — single click must
+  do nothing. `[(ngModel)]="editValue"` (a get/set bridge over the signal) keeps the active editor reactive.
+- **Editor matches the column type**: `pInputText` (text), `p-inputnumber` (numeric), `p-datepicker`
+  (dates), `p-select` (上架狀態), `p-checkbox` (允許重聽). Read-only columns — `pkid`, `partner`,
+  `courseGroup` — carry a `data-field` but **no** `(dblclick)`, so they can't open an editor.
+- **Blur persists for the plain inputs; the overlay editors must NOT commit on blur.** Text/number
+  commit on `(blur)`/`(onBlur)`. Both the **上架狀態 `p-select`** and the **`p-datepicker`s** are
+  `appendTo="body"`, so a blur-to-commit fires the instant you click an option / a date — tearing the
+  editor down before the pick lands, which reads as "the dropdown/calendar won't edit". Instead:
+  - `p-select` commits on `(onChange)` and closes via `(onHide)` (`onSelectHide`) when the panel hides
+    with no change.
+  - `p-datepicker` commits on `(onSelect)` (calendar pick) and `(onClose)` (panel closes — covers
+    click-away and typed-then-close). Binding both is safe: `commit()` guards on `savingEdit()` + the
+    active-cell check, so the second event is a no-op.
+  - The checkbox commits on `(onChange)` since a toggle is the discrete action.
+- **Validate before the call, save the whole row.** `validate()` mirrors the form's rules (required text,
+  non-negative numbers, valid dates, 上架日期 ≤ 下架日期). On failure the cell **stays in edit mode** with an
+  inline error and no request goes out. On success `buildRequest()` sends a full `CourseRequest` rebuilt
+  from the row with only the edited field overridden (the row is a superset of the DTO), and a dropdown
+  edit also refreshes the `publishStatus` nav label.
+- **The row is mutated only after the server accepts.** So a failed save needs no explicit revert —
+  closing the editor restores the untouched cell — and it surfaces the API message as a toast.
+
 ## AppUser (`int` IDENTITY + natural key, same shape as AppRole)
 
 - A **server-managed, write-only column**: `PasswordHash` never appears in any DTO/model, is seeded

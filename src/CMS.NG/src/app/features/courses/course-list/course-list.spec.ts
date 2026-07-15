@@ -75,11 +75,12 @@ describe('CourseList', () => {
   beforeEach(async () => {
     sessionStorage.clear();
 
-    service = jasmine.createSpyObj<CourseService>('CourseService', ['query', 'delete']);
+    service = jasmine.createSpyObj<CourseService>('CourseService', ['query', 'delete', 'update']);
     // Fresh copies per call — p-table sorts its bound array in place, and the default sort is
     // displayOrder (not pkid), so a shared array reference would be reordered under the spec.
     service.query.and.callFake(() => of([makeCourse({ ...AZURE }), makeCourse({ ...CCNA })]));
     service.delete.and.returnValue(of(void 0));
+    service.update.and.returnValue(of(void 0));
 
     const partnerService = jasmine.createSpyObj<PartnerService>('PartnerService', ['getAll']);
     partnerService.getAll.and.returnValue(of([
@@ -302,5 +303,230 @@ describe('CourseList', () => {
 
     api().edit(CCNA);
     expect(navigate).toHaveBeenCalledWith(['/courses', 2, 'edit']);
+  });
+
+  describe('inline editing', () => {
+    /** Find the <td> for a given course row + column via its data-field attribute. */
+    function cell(courseTitle: string, field: string): HTMLTableCellElement {
+      const row = [...fixture.nativeElement.querySelectorAll('tbody tr')]
+        .find(r => r.textContent.includes(courseTitle)) as HTMLTableRowElement;
+      return row.querySelector(`td[data-field="${field}"]`) as HTMLTableCellElement;
+    }
+
+    /** The live course row object the component is rendering (mutated on a successful save). */
+    function courseRow(pkid: number): Course {
+      return api().courses().find((c: Course) => c.pkid === pkid);
+    }
+
+    it('enters edit mode on double-click of an editable cell', () => {
+      fixture.detectChanges();
+
+      const titleCell = cell('Azure 基礎', 'title');
+      titleCell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      fixture.detectChanges();
+
+      expect(api().editing()).toEqual(jasmine.objectContaining({ pkid: 1, field: 'title' }));
+      expect(titleCell.querySelector('input')).toBeTruthy();
+    });
+
+    it('does NOT enter edit mode on a single click', () => {
+      fixture.detectChanges();
+
+      const titleCell = cell('Azure 基礎', 'title');
+      titleCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      fixture.detectChanges();
+
+      expect(api().editing()).toBeNull();
+      expect(titleCell.querySelector('input')).toBeNull();
+    });
+
+    it('does not make the three read-only columns editable', () => {
+      fixture.detectChanges();
+
+      for (const field of ['pkid', 'partner', 'courseGroup']) {
+        const readonlyCell = cell('Azure 基礎', field);
+        readonlyCell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+        fixture.detectChanges();
+
+        expect(api().editing()).withContext(field).toBeNull();
+        expect(readonlyCell.querySelector('input')).withContext(field).toBeNull();
+      }
+    });
+
+    it('persists the edit through the update endpoint when the editor loses focus (blur)', () => {
+      fixture.detectChanges();
+
+      const titleCell = cell('Azure 基礎', 'title');
+      titleCell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      fixture.detectChanges();
+
+      api().editValue = 'Azure 進階';
+      const input = titleCell.querySelector('input') as HTMLInputElement;
+      input.dispatchEvent(new Event('blur'));
+
+      expect(service.update).toHaveBeenCalledTimes(1);
+      expect(service.update).toHaveBeenCalledWith(jasmine.objectContaining({ pkid: 1, title: 'Azure 進階' }));
+      expect(courseRow(1).title).toBe('Azure 進階');
+      expect(api().editing()).toBeNull();
+    });
+
+    it('sends a full request built from the row, changing only the edited field', () => {
+      fixture.detectChanges();
+
+      api().startEdit(courseRow(1), 'hour');
+      api().editValue = 40;
+      api().commit(courseRow(1));
+
+      expect(service.update).toHaveBeenCalledWith(jasmine.objectContaining({
+        pkid: 1,
+        hour: 40,
+        title: 'Azure 基礎',
+        courseId: 'AZ-900',
+        partnerPkid: 1,
+        publishStatusPkid: 2
+      }));
+    });
+
+    it('does not call the endpoint when the value is unchanged', () => {
+      fixture.detectChanges();
+
+      const row = courseRow(1);
+      api().startEdit(row, 'title');
+      api().commit(row);
+
+      expect(service.update).not.toHaveBeenCalled();
+      expect(api().editing()).toBeNull();
+    });
+
+    it('blocks a cleared required text field and keeps the cell in edit mode', () => {
+      fixture.detectChanges();
+
+      const row = courseRow(1);
+      api().startEdit(row, 'title');
+      api().editValue = '   ';
+      api().commit(row);
+
+      expect(service.update).not.toHaveBeenCalled();
+      expect(api().editing()).toEqual(jasmine.objectContaining({ field: 'title' }));
+      expect(api().editing().error).toBeTruthy();
+    });
+
+    it('blocks a negative numeric value', () => {
+      fixture.detectChanges();
+
+      const row = courseRow(1);
+      api().startEdit(row, 'listPrice');
+      api().editValue = -5;
+      api().commit(row);
+
+      expect(service.update).not.toHaveBeenCalled();
+      expect(api().editing().error).toContain('不可小於 0');
+    });
+
+    it('blocks a non-numeric (null) numeric value', () => {
+      fixture.detectChanges();
+
+      const row = courseRow(1);
+      api().startEdit(row, 'hour');
+      api().editValue = null;
+      api().commit(row);
+
+      expect(service.update).not.toHaveBeenCalled();
+      expect(api().editing().error).toContain('有效數字');
+    });
+
+    it('blocks an invalid date value', () => {
+      fixture.detectChanges();
+
+      const row = courseRow(1);
+      api().startEdit(row, 'scheduleOn');
+      api().editValue = null;
+      api().commit(row);
+
+      expect(service.update).not.toHaveBeenCalled();
+      expect(api().editing().error).toContain('有效日期');
+    });
+
+    it('blocks 上架日期 later than 下架日期', () => {
+      fixture.detectChanges();
+
+      // Row has scheduleOff 2036-01-01; push scheduleOn past it.
+      const row = courseRow(1);
+      api().startEdit(row, 'scheduleOn');
+      api().editValue = new Date(2040, 0, 1);
+      api().commit(row);
+
+      expect(service.update).not.toHaveBeenCalled();
+      expect(api().editing().error).toContain('上架日期不可晚於下架日期');
+    });
+
+    it('blocks 下架日期 earlier than 上架日期', () => {
+      fixture.detectChanges();
+
+      // Row has scheduleOn 2026-01-01; pull scheduleOff before it.
+      const row = courseRow(1);
+      api().startEdit(row, 'scheduleOff');
+      api().editValue = new Date(2020, 0, 1);
+      api().commit(row);
+
+      expect(service.update).not.toHaveBeenCalled();
+      expect(api().editing().error).toContain('上架日期不可晚於下架日期');
+    });
+
+    it('accepts a valid date edit and persists it as yyyy-MM-dd', () => {
+      fixture.detectChanges();
+
+      const row = courseRow(1);
+      api().startEdit(row, 'scheduleOn');
+      api().editValue = new Date(2027, 5, 15);
+      api().commit(row);
+
+      expect(service.update).toHaveBeenCalledWith(jasmine.objectContaining({ scheduleOn: '2027-06-15' }));
+      expect(courseRow(1).scheduleOn).toBe('2027-06-15');
+    });
+
+    it('closes the dropdown editor without saving when the panel hides with no change', () => {
+      fixture.detectChanges();
+
+      const row = courseRow(1);
+      api().startEdit(row, 'publishStatusPkid');
+      // Panel hidden without picking a new value (click-away / same value).
+      api().onSelectHide(row);
+
+      expect(service.update).not.toHaveBeenCalled();
+      expect(api().editing()).toBeNull();
+    });
+
+    it('updates the publishStatus nav label after a dropdown edit', () => {
+      fixture.detectChanges();
+
+      const row = courseRow(1); // currently 已上架 (pkid 2)
+      api().startEdit(row, 'publishStatusPkid');
+      api().editValue = 1; // 草稿
+      api().commit(row);
+
+      expect(service.update).toHaveBeenCalledWith(jasmine.objectContaining({ publishStatusPkid: 1 }));
+      expect(courseRow(1).publishStatus).toEqual({ pkid: 1, description: '草稿' });
+    });
+
+    it('reverts the cell and surfaces the error when the save fails on the server', () => {
+      const messageService = TestBed.inject(MessageService);
+      spyOn(messageService, 'add');
+      service.update.and.returnValue(throwError(() => ({ error: { message: '伺服器錯誤' } })));
+      fixture.detectChanges();
+
+      const row = courseRow(1);
+      const originalTitle = row.title;
+      api().startEdit(row, 'title');
+      api().editValue = 'Azure 進階';
+      api().commit(row);
+
+      // Row untouched (reverted), editor closed, error surfaced.
+      expect(courseRow(1).title).toBe(originalTitle);
+      expect(api().editing()).toBeNull();
+      expect(messageService.add).toHaveBeenCalledWith(
+        jasmine.objectContaining({ severity: 'error', detail: '伺服器錯誤' })
+      );
+    });
   });
 });
