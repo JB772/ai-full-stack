@@ -16,31 +16,29 @@ a table's shape before writing code against it.
 | `spec/feature-spec.template.md` | Template for new feature specs. |
 | `spec/{sub-system}/{Table}.md` | Generated feature specs (e.g. `spec/admin/PublishStatus.md`, `spec/course/Course.md`). |
 | `spec/ui-sample-*.png` | UI style reference only — not actual content. |
-| `docs/*.md` | Deep-dive gotcha references (PK shapes, delete guards, nav objects, schema/test traps). Read the relevant one before working in that area — see the pointer table under **Gotchas**. |
+| `docs/*.md` | Deep-dive references (PK shapes, delete guards, nav objects, schema/test traps, per-feature reference patterns, env traps). Read the relevant one before working in that area — see the pointer table under **Gotchas**. |
 | `src/CMS.API` | .NET 9 Web API, Dapper, Swagger. Port 5000. |
 | `src/CMS.API.Tests` | xUnit. |
 | `src/CMS.NG` | Angular 20 standalone + PrimeNG 20. Port 4200. |
 
 ## Commands
 
-Node is installed but **not on PATH** — prepend it in every shell:
-`$env:Path = "C:\Program Files\nodejs;$env:Path"`
+Node is **not on PATH** — prepend it: PowerShell `$env:Path = "C:\Program Files\nodejs;$env:Path"`
+(Bash tool `export PATH="/c/Program Files/nodejs:$PATH"`).
 
 ```powershell
 dotnet run --project src\CMS.API      # API + Swagger UI at http://localhost:5000/swagger
-dotnet test                           # xUnit
+dotnet test                           # xUnit — stop the API first (see below)
 cd src\CMS.NG; npm start              # http://localhost:4200
-cd src\CMS.NG; npm test               # Karma + Jasmine (needs CHROME_BIN for headless)
+cd src\CMS.NG; npm test               # Karma + Jasmine (headless needs CHROME_BIN)
 ```
 
-`ng test` headless: `$env:CHROME_BIN = "C:\Program Files\Google\Chrome\Application\chrome.exe"`
-then `npx ng test --watch=false --browsers=ChromeHeadless`.
+**Stop the API before `dotnet test`** — a running `dotnet run` locks the API dll the test build
+overwrites, failing with a confusing `MSB3021` (not a compile error).
+`Get-Process CMS.API | Stop-Process -Force`.
 
-**Stop the API before `dotnet test`.** A running `dotnet run` holds a lock on
-`src\CMS.API\bin\Debug\net9.0\CMS.API.dll`, and the test project rebuilds the API into that same
-folder — so the build dies with `MSB3021 ... being used by another process` and the failure looks
-nothing like a compile error. `Get-Process CMS.API | Stop-Process -Force` first. To type-check the
-API *without* stopping it, build to a throwaway folder: `dotnet build src\CMS.API --output <tmp>`.
+Shell/env traps (PowerShell `.ps1` execution-policy block on `npm`/`ng`/`npx`, the `dotnet test` file
+lock, headless Chrome, UTF-8 curl) → **`docs/environment.md`**.
 
 ## Architecture
 
@@ -81,7 +79,6 @@ directly, and the API's CORS policy allows any localhost origin.
   not be a junction (`PartnerCourseGroup`). The same table can appear in several `.sql` files — diff them,
   and grep *every* file when hunting for a table's children/FKs.
 - **PrimeNG major version tracks Angular's** (20 → 20); `primeng@latest` pulls v21 and fails peer resolution.
-- **UTF-8 through the shell.** Inline Chinese JSON to `curl` gets mangled — use `--data-binary @file` or Swagger UI.
 
 ### Deep reference — read the relevant file before working in that area
 
@@ -90,15 +87,16 @@ directly, and the API's CORS policy allows any localhost origin.
 | `docs/pk-shapes.md` | adding a table — the four PK shapes (tinyint / smallint / plain-int / int+natural-key) and `AppUser`'s backend-only `PasswordHash` (SysConfig-seeded, reset-only) |
 | `docs/delete-guards.md` | writing any DELETE — 409-not-FK guards, multi-child messages, no-FK orphans, and load-bearing `ON DELETE CASCADE` checks |
 | `docs/relationships-and-nav.md` | touching FKs or N-N — `Course` multi-map nav objects, nullable-FK `LEFT JOIN`, `forkJoin` lookups, `date` ⇄ `p-datepicker`, why N-N editors are deferred |
+| `docs/reference-features.md` | adding a feature — the *secondary* pattern each built feature is the reference for (multi-child & cascading delete guards, multi-map nav, write-only column, custom scheduler UI, lookup-only FK targets) |
 | `docs/schema-and-testing.md` | reading the schema or writing tests — invented-constraint traps, multi-file `.sql`, `p-table` in-place sort, don't-assert-Chinese-sort-order |
+| `docs/environment.md` | a Windows/PowerShell dev trap — Node PATH, `.ps1` execution policy, the `dotnet test` file lock, headless Chrome, UTF-8 curl |
 
 ## Adding a feature
 
-Built so far: **AppRole** (`/api/app-roles`), **AppUser** (`/api/app-users`),
-**PublishStatus** (`/api/publish-statuses`), **Partner** (`/api/partners`),
-**CourseGroup** (`/api/course-groups`) and **Course** (`/api/courses`).
-Use those as the reference implementation — the sample specs describe a richer system than what exists.
-Pick the one whose PK matches the table you're adding:
+Built: **AppRole**, **AppUser**, **PublishStatus**, **Partner**, **CourseGroup**, **Course**,
+**FeaturedPromoItem** (routes are the kebab-case plural, e.g. `/api/app-roles`). They are the reference
+implementations — the sample specs describe a richer system than exists. Pick one by PK shape, then read
+its row in `docs/reference-features.md` for the secondary patterns it demonstrates:
 
 | Reference | PK shape | Copy it when… |
 |-----------|----------|---------------|
@@ -106,27 +104,17 @@ Pick the one whose PK matches the table you're adding:
 | `PublishStatus` | `tinyint`, **no** IDENTITY | the *user* supplies the key |
 | `Partner` | `smallint` IDENTITY | the DB generates the key (the common case) |
 | `Course` | `int` IDENTITY (plain) | the table has **outbound FKs** (nav objects via multi-map) |
+| `FeaturedPromoItem` | `int` IDENTITY (plain) | the UI is **not** the list/detail/form triad, or you need a multi-column UNIQUE 409 / a positional swap |
 
-`Partner` is also the reference for a multi-child delete guard and for a table with no outbound FKs.
-`CourseGroup` is the reference for a **cascading** FK — the case where the delete guard is the only thing
-preventing data loss — and for a single-column table (one form field, keyword-only filter; don't pad it).
-`Course` is the reference for **outbound FKs**: Dapper multi-map nav objects, a nullable-FK `LEFT JOIN`,
-FK dropdowns fed by `forkJoin` of existing feature services, and `date` ⇄ `p-datepicker` conversion.
-`AppUser` (same PK shape as `AppRole`) is the reference for a **server-managed, write-only column** — a
-secret (`PasswordHash`) that never appears in any DTO/model, is seeded from `SysConfig` on create, and
-is changed only through a dedicated bodyless reset endpoint (details in `docs/pk-shapes.md`).
+1. Read the table in `database/*.sql`; write a spec from `spec/feature-spec.template.md` to
+   `spec/{sub-system}/{Table}.md`. Confirm whether `pkid` is really an IDENTITY.
+2. Backend: model trio → repository → controller → register in `Program.cs` (+ a `/api/lookups/{plural}`
+   endpoint if the table is an FK target — a lookup-only target needs no full feature).
+3. Frontend: model → service → list / detail / form → route (`/new` before `/:id`) → sidebar entry in
+   `app.ts` (`app.html` renders nav groups generically). A custom UI can collapse this to one component
+   on a single route (see `FeaturedPromoItem` in `docs/reference-features.md`).
+4. Tests both sides: xUnit endpoints (list/filter, view, add, edit, delete-guard) + an in-memory fake
+   swapped into `CmsApiFactory`; Karma for the components and the service.
 
-Per-shape and per-pattern depth for all of the above lives in `docs/*.md` — see the pointer table under
-**Gotchas**.
-
-1. Read the table in `database/*.sql` and write a spec from `spec/feature-spec.template.md`,
-   saved to `spec/{sub-system}/{Table}.md`. Check whether `pkid` is really an IDENTITY.
-2. Backend: model trio → repository → controller → register in `Program.cs` (+ a
-   `/api/lookups/{plural}` endpoint if the table is an FK target).
-3. Frontend: model → service → list / detail / form → route (`/new` before `/:id`) → sidebar entry
-   in `app.ts`. `app.html` renders nav groups generically and needs no edit.
-4. Tests both sides: xUnit for the endpoints (list/filter, view, add, edit, delete-guard), plus an
-   in-memory fake swapped into `CmsApiFactory`; Karma for the components and the data service.
-
-The `/crud` skill automates steps 1–4, but read the gotchas above — it assumes a `core/` layout and a
-RowAudit subsystem that this repo does not have.
+The `/crud` skill automates steps 1–4, but it assumes a `core/` layout and a RowAudit subsystem this
+repo lacks — follow the code and the always-true rules above.

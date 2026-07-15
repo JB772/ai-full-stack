@@ -33,6 +33,15 @@ public class CmsApiFactory : WebApplicationFactory<Program>
 
             services.RemoveAll<ICourseRepository>();
             services.AddSingleton<ICourseRepository, InMemoryCourseRepository>();
+
+            services.RemoveAll<IFeaturedPromoItemRepository>();
+            services.AddSingleton<IFeaturedPromoItemRepository, InMemoryFeaturedPromoItemRepository>();
+
+            services.RemoveAll<ITrainingCenterRepository>();
+            services.AddSingleton<ITrainingCenterRepository, InMemoryTrainingCenterRepository>();
+
+            services.RemoveAll<IPromotionRepository>();
+            services.AddSingleton<IPromotionRepository, InMemoryPromotionRepository>();
         });
     }
 }

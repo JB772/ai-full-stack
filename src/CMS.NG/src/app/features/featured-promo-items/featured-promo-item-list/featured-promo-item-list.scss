@@ -1,0 +1,155 @@
+/* TrainingCenter tabs */
+.center-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 2px solid var(--p-content-border-color);
+  margin-bottom: 1rem;
+}
+
+.center-tab {
+  padding: 0.5rem 1.25rem;
+  border: 1px solid var(--p-content-border-color);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: var(--p-content-background);
+  color: var(--p-text-muted-color);
+  cursor: pointer;
+  font-size: 0.95rem;
+
+  &.active {
+    color: var(--p-primary-color);
+    font-weight: 600;
+    border-color: var(--p-primary-color);
+    background: var(--p-highlight-background, var(--p-content-hover-background));
+  }
+}
+
+/* Week navigation */
+.week-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.week-label {
+  font-weight: 600;
+  min-width: 10rem;
+  text-align: center;
+}
+
+/* Weekly grid */
+.scheduler {
+  &.loading {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+}
+
+.day-block {
+  margin-bottom: 0.75rem;
+}
+
+.day-header {
+  background: var(--p-content-hover-background, #e9ecef);
+  border: 1px solid var(--p-content-border-color);
+  padding: 0.4rem 0.75rem;
+  font-weight: 600;
+}
+
+.slot-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--p-content-border-color);
+  border-top: none;
+
+  &.empty {
+    background: var(--p-content-background);
+  }
+}
+
+.slot-no {
+  width: 1.25rem;
+  text-align: center;
+  color: var(--p-text-muted-color);
+}
+
+.slot-move {
+  display: inline-flex;
+  gap: 0.35rem;
+  font-weight: 700;
+}
+
+.slot-links {
+  display: inline-flex;
+  gap: 0.5rem;
+}
+
+.cell {
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  background: var(--p-content-background);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &.promo { flex: 0 0 18rem; }
+  &.topic { flex: 0 0 20rem; }
+  &.desc { flex: 1 1 auto; min-width: 12rem; }
+
+  &.empty-box { min-height: 1.9rem; }
+}
+
+/* Inline edit form */
+.slot-edit {
+  flex: 1 1 auto;
+  border: 2px solid var(--p-text-color);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  background: var(--p-content-background);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.edit-field {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+
+  label {
+    flex: 0 0 6rem;
+    font-weight: 600;
+  }
+}
+
+.edit-actions {
+  display: flex;
+  gap: 1.5rem;
+  padding-left: 6.75rem;
+}
+
+.link {
+  color: var(--p-primary-color);
+  cursor: pointer;
+  text-decoration: none;
+  user-select: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.w-full {
+  width: 100%;
+}
+
+:host ::ng-deep .w-full,
+:host ::ng-deep .w-full input,
+:host ::ng-deep .edit-field .p-autocomplete {
+  width: 100%;
+}

@@ -25,7 +25,21 @@ describe('App', () => {
     expect(sidebar.textContent).toContain('系統管理 Admin');
     expect(sidebar.textContent).toContain('角色 AppRole');
 
-    const link = sidebar.querySelector('.nav-items a');
-    expect(link.getAttribute('href')).toBe('/app-roles');
+    const links = [...sidebar.querySelectorAll('.nav-items a')] as HTMLAnchorElement[];
+    const appRoleLink = links.find(a => a.getAttribute('href') === '/app-roles');
+    expect(appRoleLink).toBeTruthy();
+  });
+
+  it('renders the 首頁 Home nav group with the 上稿作業 FeaturedPromoItem entry', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+
+    const sidebar = fixture.nativeElement.querySelector('.sidebar');
+    expect(sidebar.textContent).toContain('首頁 Home');
+    expect(sidebar.textContent).toContain('上稿作業 FeaturedPromoItem');
+
+    const links = [...sidebar.querySelectorAll('.nav-items a')] as HTMLAnchorElement[];
+    const link = links.find(a => a.getAttribute('href') === '/featured-promo-items');
+    expect(link).toBeTruthy();
   });
 });

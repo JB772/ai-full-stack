@@ -11,7 +11,9 @@ public class LookupsController(
     IAppRoleRepository appRoleRepository,
     IPublishStatusRepository publishStatusRepository,
     IPartnerRepository partnerRepository,
-    ICourseGroupRepository courseGroupRepository) : ControllerBase
+    ICourseGroupRepository courseGroupRepository,
+    ITrainingCenterRepository trainingCenterRepository,
+    IPromotionRepository promotionRepository) : ControllerBase
 {
     /// <summary>角色下拉選單資料。</summary>
     [HttpGet("app-roles")]
@@ -36,4 +38,16 @@ public class LookupsController(
     [ProducesResponseType(typeof(IEnumerable<CourseGroup>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<CourseGroup>>> GetCourseGroups()
         => Ok(await courseGroupRepository.GetAllAsync());
+
+    /// <summary>訓練中心下拉／分頁資料 (依 DisplayOrder 排序，顯示 Name)。</summary>
+    [HttpGet("training-centers")]
+    [ProducesResponseType(typeof(IEnumerable<TrainingCenterLookup>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<TrainingCenterLookup>>> GetTrainingCenters()
+        => Ok(await trainingCenterRepository.GetAllAsync());
+
+    /// <summary>促銷下拉／查詢資料 (依 PromoCode 排序)，供上稿表單以 PromoCode 解析 Promotion_pkid。</summary>
+    [HttpGet("promo-codes")]
+    [ProducesResponseType(typeof(IEnumerable<PromotionLookup>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<PromotionLookup>>> GetPromoCodes()
+        => Ok(await promotionRepository.GetAllAsync());
 }

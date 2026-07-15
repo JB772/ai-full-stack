@@ -1,0 +1,103 @@
+<div class="page-toolbar">
+  <div class="page-title">
+    <h1>上稿作業 FeaturedPromoItem</h1>
+    <span class="page-subtitle">首頁精選促銷排程 (每週一～日，每日三個欄位)</span>
+  </div>
+</div>
+
+<!-- TrainingCenter tabs -->
+<div class="center-tabs" role="tablist">
+  @for (center of trainingCenters(); track center.pkid) {
+    <button
+      type="button"
+      role="tab"
+      class="center-tab"
+      [class.active]="center.pkid === activeCenterPkid()"
+      [attr.aria-selected]="center.pkid === activeCenterPkid()"
+      (click)="selectCenter(center.pkid)">
+      {{ center.name }}
+    </button>
+  }
+</div>
+
+<!-- Week navigation -->
+<div class="week-nav">
+  <p-button icon="pi pi-angle-double-left" severity="secondary" [text]="true" aria-label="上一週" (onClick)="prevWeek()" />
+  <span class="week-label">{{ weekLabel() }}</span>
+  <p-button icon="pi pi-angle-double-right" severity="secondary" [text]="true" aria-label="下一週" (onClick)="nextWeek()" />
+</div>
+
+<!-- Weekly grid -->
+<div class="scheduler" [class.loading]="loading()">
+  @for (day of days(); track toIsoDate(day)) {
+    <div class="day-block">
+      <div class="day-header">{{ dayLabel(day) }}</div>
+
+      @for (slot of slots; track slot) {
+        @let item = itemAt(day, slot);
+
+        <div class="slot-row" [class.empty]="!item">
+          <span class="slot-no">{{ slot }}</span>
+
+          @if (isEditing(day, slot)) {
+            <!-- Inline edit / new form -->
+            <div class="slot-edit">
+              <div class="edit-field">
+                <label>PromoCode:</label>
+                <p-autocomplete
+                  [(ngModel)]="editModel.promoCode"
+                  [suggestions]="promoSuggestions()"
+                  optionLabel="promoCode"
+                  [dropdown]="true"
+                  [forceSelection]="false"
+                  field="promoCode"
+                  (completeMethod)="completePromo($event)"
+                  (onSelect)="onPromoSelect($event.value)"
+                  styleClass="w-full"
+                  appendTo="body"
+                  placeholder="輸入或選擇促銷代碼" />
+              </div>
+              <div class="edit-field">
+                <label>Topic:</label>
+                <input pInputText class="w-full" [(ngModel)]="editModel.topic" maxlength="100" />
+              </div>
+              <div class="edit-field">
+                <label>Description:</label>
+                <input pInputText class="w-full" [(ngModel)]="editModel.description" maxlength="300" />
+              </div>
+              <div class="edit-actions">
+                <a class="link" (click)="save()">Save</a>
+                <a class="link" (click)="cancelEdit()">Cancel</a>
+              </div>
+            </div>
+          } @else if (item) {
+            <!-- Populated slot -->
+            <span class="slot-move">
+              <a class="link" title="往下移" (click)="move(item, 'down')">＋</a>
+              <a class="link" title="往上移" (click)="move(item, 'up')">－</a>
+            </span>
+            <span class="slot-links">
+              <a class="link" (click)="startEdit(day, slot, item)">Edit</a>
+              <a class="link" (click)="copy(item)">Copy</a>
+              <a class="link" (click)="confirmDelete(item)">Delete</a>
+            </span>
+            <span class="cell promo">{{ item.promotion?.promoCode }}</span>
+            <span class="cell topic">{{ item.topic }}</span>
+            <span class="cell desc">{{ item.description }}</span>
+          } @else {
+            <!-- Empty slot -->
+            <span class="slot-links">
+              <a class="link" (click)="startEdit(day, slot)">Edit</a>
+              @if (clipboard()) {
+                <a class="link" (click)="paste(day, slot)">Paste</a>
+              }
+            </span>
+            <span class="cell promo empty-box"></span>
+            <span class="cell topic empty-box"></span>
+            <span class="cell desc empty-box"></span>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>
