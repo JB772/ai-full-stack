@@ -5,13 +5,15 @@ import { forkJoin } from 'rxjs';
 import { ButtonModule } from 'primeng/button';
 import { DrawerModule } from 'primeng/drawer';
 import { InputTextModule } from 'primeng/inputtext';
+import { InputNumberModule } from 'primeng/inputnumber';
+import { CheckboxModule } from 'primeng/checkbox';
 import { DatePickerModule } from 'primeng/datepicker';
 import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 import { ConfirmationService, MessageService } from 'primeng/api';
-import { Course, CourseQuery } from '../course.model';
+import { Course, CourseQuery, CourseRequest } from '../course.model';
 import { CourseService } from '../course.service';
 import { fromIsoDate, toIsoDate } from '../date.util';
 import { PartnerService } from '../../partners/partner.service';
@@ -39,6 +41,58 @@ interface Option {
   value: number;
 }
 
+/** Columns editable in place on the list. pkid, partner and courseGroup are intentionally excluded. */
+type EditableField =
+  | 'title'
+  | 'courseId'
+  | 'prodCourseId'
+  | 'displayOrder'
+  | 'publishStatusPkid'
+  | 'scheduleOn'
+  | 'scheduleOff'
+  | 'hour'
+  | 'listPrice'
+  | 'learningCredit'
+  | 'canRepeat';
+
+/** The single cell currently open for inline editing. */
+interface CellEdit {
+  pkid: number;
+  field: EditableField;
+  /** Editor-bound working value (Date for date columns, number for numeric/select, etc.). */
+  value: string | number | boolean | Date | null;
+  /** Inline validation error; when set the cell stays in edit mode. */
+  error: string | null;
+}
+
+/** Outcome of validating an edited cell before persisting. */
+interface ValidateResult {
+  error: string | null;
+  changed: boolean;
+  patch?: Partial<CourseRequest>;
+  apply?: (course: Course) => void;
+}
+
+const FIELD_LABELS: Record<EditableField, string> = {
+  title: '課程名稱',
+  courseId: '簡介代碼',
+  prodCourseId: '科目代碼',
+  displayOrder: '顯示順序',
+  publishStatusPkid: '上架狀態',
+  scheduleOn: '上架日期',
+  scheduleOff: '下架日期',
+  hour: '時數',
+  listPrice: '定價',
+  learningCredit: '點數',
+  canRepeat: '允許重聽'
+};
+
+const TEXT_MAX: Record<'title' | 'courseId' | 'prodCourseId', number> = {
+  title: 200,
+  courseId: 50,
+  prodCourseId: 50
+};
+
 @Component({
   selector: 'app-course-list',
   imports: [
@@ -47,6 +101,8 @@ interface Option {
     ButtonModule,
     DrawerModule,
     InputTextModule,
+    InputNumberModule,
+    CheckboxModule,
     DatePickerModule,
     SelectModule,
     TableModule,
@@ -207,6 +263,206 @@ export class CourseList implements OnInit {
 
   protected edit(course: Course): void {
     this.router.navigate(['/courses', course.pkid, 'edit']);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Inline (in-place) editing — double-click a cell to edit, blur to persist.
+  // ---------------------------------------------------------------------------
+
+  /** The cell currently being edited (null = none). */
+  protected readonly editing = signal<CellEdit | null>(null);
+  /** True while an inline update is in flight — blocks starting a second edit. */
+  protected readonly savingEdit = signal(false);
+
+  /** Two-way bridge for the active editor's value (keeps the signal reactive). */
+  protected get editValue(): CellEdit['value'] {
+    return this.editing()?.value ?? null;
+  }
+  protected set editValue(value: CellEdit['value']) {
+    const current = this.editing();
+    if (current) {
+      this.editing.set({ ...current, value });
+    }
+  }
+
+  protected isEditing(course: Course, field: EditableField): boolean {
+    const e = this.editing();
+    return !!e && e.pkid === course.pkid && e.field === field;
+  }
+
+  /** Enter edit mode for a cell. Bound to (dblclick) — single click never fires this. */
+  protected startEdit(course: Course, field: EditableField): void {
+    if (this.savingEdit()) {
+      return;
+    }
+    this.editing.set({ pkid: course.pkid, field, value: this.editorValue(course, field), error: null });
+  }
+
+  protected cancelEdit(): void {
+    this.editing.set(null);
+  }
+
+  /**
+   * The 上架狀態 dropdown persists on (onChange) — NOT on blur: its overlay is appended to `body`, so a
+   * blur-to-commit fires as the option is clicked and tears the editor down before the pick lands. This
+   * closes the editor only when the panel hides without a change (click-away / same value re-picked).
+   */
+  protected onSelectHide(course: Course): void {
+    if (this.savingEdit()) {
+      return;
+    }
+    if (this.isEditing(course, 'publishStatusPkid')) {
+      this.cancelEdit();
+    }
+  }
+
+  private editorValue(course: Course, field: EditableField): CellEdit['value'] {
+    switch (field) {
+      case 'scheduleOn':
+        return fromIsoDate(course.scheduleOn);
+      case 'scheduleOff':
+        return fromIsoDate(course.scheduleOff);
+      default:
+        return course[field] as CellEdit['value'];
+    }
+  }
+
+  /**
+   * Persist the active edit (on blur). Validates first: on failure the cell stays in edit mode with an
+   * inline error; on a server failure the row is left untouched (so the cell reverts) and a toast shows.
+   */
+  protected commit(course: Course): void {
+    const edit = this.editing();
+    if (!edit || edit.pkid !== course.pkid || this.savingEdit()) {
+      return;
+    }
+
+    const outcome = this.validate(course, edit.field, edit.value);
+    if (outcome.error) {
+      this.editing.set({ ...edit, error: outcome.error });
+      return;
+    }
+
+    if (!outcome.changed) {
+      this.editing.set(null);
+      return;
+    }
+
+    this.savingEdit.set(true);
+    this.service.update(this.buildRequest(course, outcome.patch!)).subscribe({
+      next: () => {
+        // Only touch the displayed row once the server has accepted the change.
+        outcome.apply!(course);
+        this.savingEdit.set(false);
+        this.editing.set(null);
+      },
+      error: err => {
+        // The row was never mutated, so simply closing the editor reverts the cell.
+        this.savingEdit.set(false);
+        this.editing.set(null);
+        const detail = err?.error?.message ?? '更新課程時發生錯誤。';
+        this.messageService.add({ severity: 'error', summary: '更新失敗', detail });
+      }
+    });
+  }
+
+  private validate(course: Course, field: EditableField, raw: CellEdit['value']): ValidateResult {
+    switch (field) {
+      case 'title':
+      case 'courseId':
+      case 'prodCourseId': {
+        const text = typeof raw === 'string' ? raw.trim() : '';
+        if (!text) {
+          return { error: `${FIELD_LABELS[field]}不可為空。`, changed: false };
+        }
+        const max = TEXT_MAX[field];
+        if (text.length > max) {
+          return { error: `${FIELD_LABELS[field]}長度不可超過 ${max} 字。`, changed: false };
+        }
+        return this.result(text === course[field], { [field]: text } as Partial<CourseRequest>, c => { (c as unknown as Record<string, unknown>)[field] = text; });
+      }
+
+      case 'displayOrder':
+      case 'hour':
+      case 'listPrice':
+      case 'learningCredit': {
+        if (typeof raw !== 'number' || Number.isNaN(raw)) {
+          return { error: `${FIELD_LABELS[field]}必須為有效數字。`, changed: false };
+        }
+        if (raw < 0) {
+          return { error: `${FIELD_LABELS[field]}不可小於 0。`, changed: false };
+        }
+        return this.result(raw === course[field], { [field]: raw } as Partial<CourseRequest>, c => { (c as unknown as Record<string, unknown>)[field] = raw; });
+      }
+
+      case 'publishStatusPkid': {
+        if (typeof raw !== 'number') {
+          return { error: '上架狀態為必填。', changed: false };
+        }
+        const option = this.publishStatusOptions().find(o => o.value === raw);
+        return this.result(raw === course.publishStatusPkid, { publishStatusPkid: raw }, c => {
+          c.publishStatusPkid = raw;
+          if (option) {
+            c.publishStatus = { pkid: option.value, description: option.label };
+          }
+        });
+      }
+
+      case 'scheduleOn':
+      case 'scheduleOff': {
+        const iso = raw instanceof Date ? toIsoDate(raw) : null;
+        if (!iso) {
+          return { error: `${FIELD_LABELS[field]}必須為有效日期。`, changed: false };
+        }
+        // yyyy-MM-dd strings compare correctly lexicographically.
+        const onIso = field === 'scheduleOn' ? iso : course.scheduleOn;
+        const offIso = field === 'scheduleOff' ? iso : course.scheduleOff;
+        if (onIso && offIso && onIso > offIso) {
+          return { error: '上架日期不可晚於下架日期。', changed: false };
+        }
+        return this.result(iso === course[field], { [field]: iso } as Partial<CourseRequest>, c => { (c as unknown as Record<string, unknown>)[field] = iso; });
+      }
+
+      case 'canRepeat': {
+        const value = !!raw;
+        return this.result(value === course.canRepeat, { canRepeat: value }, c => { c.canRepeat = value; });
+      }
+    }
+  }
+
+  private result(unchanged: boolean, patch: Partial<CourseRequest>, apply: (course: Course) => void): ValidateResult {
+    return { error: null, changed: !unchanged, patch, apply };
+  }
+
+  /** Build a full update DTO from the row, overriding only the edited field(s). */
+  private buildRequest(course: Course, overrides: Partial<CourseRequest>): CourseRequest {
+    return {
+      pkid: course.pkid,
+      title: course.title,
+      officialTitle: course.officialTitle,
+      courseId: course.courseId,
+      prodCourseId: course.prodCourseId,
+      friendlyUrl: course.friendlyUrl,
+      displayOrder: course.displayOrder,
+      partnerPkid: course.partnerPkid,
+      courseGroupPkid: course.courseGroupPkid,
+      publishStatusPkid: course.publishStatusPkid,
+      scheduleOn: course.scheduleOn,
+      scheduleOff: course.scheduleOff,
+      hour: course.hour,
+      listPrice: course.listPrice,
+      learningCredit: course.learningCredit,
+      material: course.material,
+      objective: course.objective,
+      target: course.target,
+      prerequisites: course.prerequisites,
+      outline: course.outline,
+      towardCertOrExam: course.towardCertOrExam,
+      note: course.note,
+      otherInfo: course.otherInfo,
+      canRepeat: course.canRepeat,
+      ...overrides
+    };
   }
 
   private persistFilters(): void {
