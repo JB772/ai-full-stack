@@ -84,6 +84,14 @@ directly, and the API's CORS policy allows any localhost origin.
   (build an anchor with `href=dataUrl`, `download={name}.png`, `.click()`). See the QR block in
   `course-detail` (title + image + download button in 基本資料). In tests, `qrcode.toDataURL` is
   overloaded — `spyOn(QRCode, 'toDataURL') as unknown as jasmine.Spy` to stub it.
+- **The viewport is the scroll container — there is no fixed app header.** `.layout` is a flex row
+  (sidebar + `.content`) with `min-height: 100vh`; the document itself scrolls. So a `.page-toolbar`
+  can be pinned with plain `position: sticky; top: 0` (+ a `z-index` above the fields) — no scroll
+  listener, no fixed positioning. It sticks to the viewport top within the content region without
+  covering the sidebar (a separate flex column) or a header (there is none), and the toolbar's opaque
+  `--p-content-background` keeps scrolling fields from showing through. `course-form` does this via a
+  `sticky-toolbar` class on both New and Edit (one component serves both). Assert it in a headless
+  Karma run with `getComputedStyle(el).position === 'sticky'`.
 
 ### Deep reference — read the relevant file before working in that area
 

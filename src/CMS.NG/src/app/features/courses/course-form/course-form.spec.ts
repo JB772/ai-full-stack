@@ -129,6 +129,21 @@ describe('CourseForm', () => {
     return fixture.componentInstance as any;
   }
 
+  /** The action toolbar must stay pinned to the top of the form while the body scrolls,
+      and keep Save/Cancel reachable, on both New and Edit. */
+  function assertStickyToolbarWithActions(): void {
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+
+    const toolbar = el.querySelector('.page-toolbar.sticky-toolbar') as HTMLElement;
+    expect(toolbar).withContext('action toolbar with sticky styling').toBeTruthy();
+    expect(getComputedStyle(toolbar).position).toBe('sticky');
+
+    const actions = toolbar.querySelector('.page-actions') as HTMLElement;
+    expect(actions.textContent).toContain('儲存');
+    expect(actions.textContent).toContain('取消');
+  }
+
   describe('add mode', () => {
     beforeEach(async () => await setup(null));
 
@@ -137,6 +152,10 @@ describe('CourseForm', () => {
 
       expect(api().isEdit()).toBeFalse();
       expect(service.getByPkid).not.toHaveBeenCalled();
+    });
+
+    it('pins the action toolbar and keeps Save/Cancel present', () => {
+      assertStickyToolbarWithActions();
     });
 
     it('has no pkid control — the key is IDENTITY-generated', () => {
@@ -222,6 +241,10 @@ describe('CourseForm', () => {
 
   describe('edit mode', () => {
     beforeEach(async () => await setup('1'));
+
+    it('pins the action toolbar and keeps Save/Cancel present', () => {
+      assertStickyToolbarWithActions();
+    });
 
     it('loads the course into the form, parsing iso dates to Date objects', () => {
       fixture.detectChanges();
