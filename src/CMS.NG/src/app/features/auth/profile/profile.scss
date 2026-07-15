@@ -1,0 +1,17 @@
+.field-hint {
+  display: block;
+  color: var(--p-text-muted-color);
+  font-size: 0.78rem;
+  margin-top: 0.25rem;
+}
+
+.roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+:host ::ng-deep .w-full,
+:host ::ng-deep .w-full input {
+  width: 100%;
+}

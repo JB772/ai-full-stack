@@ -42,4 +42,23 @@ public class InMemoryAuthRepository : IAuthRepository
     }
 
     public Task<string> GetSigningKeyAsync() => Task.FromResult(SigningKey);
+
+    public Task<AuthenticatedUser?> UpdateUserNameAsync(string userId, string userName)
+    {
+        var index = _accounts.FindIndex(a => a.UserId == userId);
+        if (index < 0)
+        {
+            return Task.FromResult<AuthenticatedUser?>(null);
+        }
+
+        var updated = _accounts[index] with { UserName = userName };
+        _accounts[index] = updated;
+
+        return Task.FromResult<AuthenticatedUser?>(new AuthenticatedUser
+        {
+            UserId = updated.UserId,
+            UserName = updated.UserName,
+            RoleIds = updated.RoleIds
+        });
+    }
 }

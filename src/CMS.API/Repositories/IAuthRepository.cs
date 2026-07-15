@@ -12,4 +12,10 @@ public interface IAuthRepository
 
     /// <summary>取得 JWT 簽章金鑰 (SysConfig['appConfig'] JSON 內的 symmetricSecurityKey)。</summary>
     Task<string> GetSigningKeyAsync();
+
+    /// <summary>
+    /// 更新指定使用者的 UserName (UserId 為 AppUser 的自然主鍵)。呼叫端須確保 userId 取自 JWT，
+    /// userName 已去除前後空白且非空。回傳更新後含角色的使用者；查無此帳號時回傳 null。
+    /// </summary>
+    Task<AuthenticatedUser?> UpdateUserNameAsync(string userId, string userName);
 }

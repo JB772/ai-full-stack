@@ -15,3 +15,15 @@ export interface AuthProfile {
   accessToken: string;
   roles: string[];
 }
+
+/** Body posted to PUT /api/Auth/profile. Only userName is honoured; the server takes userId from the JWT. */
+export interface UpdateProfileRequest {
+  userName: string;
+}
+
+/** Response from PUT /api/Auth/profile. userId/roles are read-only display fields. */
+export interface ProfileResponse {
+  userId: string;
+  userName: string;
+  roles: string[];
+}

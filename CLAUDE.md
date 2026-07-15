@@ -96,9 +96,23 @@ directly, and the API's CORS policy allows any localhost origin.
   default-password path, the **live SysConfig key lookup is not covered by `dotnet test`** — the
   `InMemoryAuthRepository` fake (swapped into `CmsApiFactory`) supplies a known ≥32-char key; verify the
   real Dapper path via Swagger against a DB whose `appConfig` row has `symmetricSecurityKey`.
-- **Authorization is global: every endpoint requires a valid Bearer token except `AuthController`.**
-  `Program.cs` sets a `FallbackPolicy` (`RequireAuthenticatedUser`) + `AddJwtBearer`; only
-  `AuthController` carries `[AllowAnonymous]`. The bearer signing key is resolved at runtime by
+- **Self-service profile edit is `PUT /api/auth/profile` (authenticated) — identity comes from the JWT,
+  never the body.** The signed-in user may change **only their own `UserName`**. `AuthController.UpdateProfile`
+  reads `UserId` from `User.FindFirstValue(JwtTokenService.UserIdClaimType)` and passes it to
+  `IAuthRepository.UpdateUserNameAsync(userId, userName)` (Dapper `UPDATE AppUser SET UserName WHERE UserId`,
+  then reads the row + roles back). `UpdateProfileRequest` *has* a `UserId` field but it is **deliberately
+  ignored** (present only so tests can prove a body `UserId` can't retarget another account); `UserName` is
+  trimmed and required (empty/whitespace → **400**, not the login-style generic 401). Response is
+  `ProfileResponse { userId, userName, roles }` (roles are display-only, unchangeable here). Frontend:
+  `features/auth/profile/` (`Profile` component, route `/profile` under the token-guarded parent, "我的個人資料
+  My Profile" link in the shell's `sidebar-user` block). `AuthService.updateProfile(userName)` PUTs `{ userName }`
+  and, on success, writes the new name back into the `auth-profile` session blob **and** the `profileSignal`, so
+  `App`'s `userName()` refreshes live — roles/token in the session are left intact. Like login, the real Dapper
+  `UPDATE` isn't covered by `dotnet test` (the in-memory fake mutates its seed list); smoke-test via Swagger.
+- **Authorization is global: every endpoint requires a valid Bearer token except `AuthController.Login`.**
+  `Program.cs` sets a `FallbackPolicy` (`RequireAuthenticatedUser`) + `AddJwtBearer`; `[AllowAnonymous]`
+  is **action-scoped on `Login` only** (not the whole controller — `AuthController` also hosts the
+  authenticated `PUT /api/auth/profile`, which carries `[Authorize]` and falls under the global policy). The bearer signing key is resolved at runtime by
   `JwtSigningKeyProvider` (a singleton that reads the same `symmetricSecurityKey` via `IAuthRepository`
   and caches it) and fed to `TokenValidationParameters.IssuerSigningKeyResolver`; validation uses
   `MapInboundClaims = false` + `RoleClaimType = "role"`, no issuer/audience. **Consequence for tests:**

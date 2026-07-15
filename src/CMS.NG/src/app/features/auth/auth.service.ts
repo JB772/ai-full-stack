@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 import { environment } from '@env/environment';
-import { AuthProfile, LoginRequest } from './auth.model';
+import { AuthProfile, LoginRequest, ProfileResponse } from './auth.model';
 
 /** Session-storage key holding the signed-in {@link AuthProfile}. */
 export const AUTH_STORAGE_KEY = 'auth-profile';
@@ -16,6 +16,7 @@ export const AUTH_STORAGE_KEY = 'auth-profile';
 export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly loginUrl = `${environment.apiBaseUrl}/Auth/login`;
+  private readonly profileUrl = `${environment.apiBaseUrl}/Auth/profile`;
 
   private readonly profileSignal = signal<AuthProfile | null>(this.readProfile());
 
@@ -38,6 +39,28 @@ export class AuthService {
 
   logout(): void {
     this.clearSession();
+  }
+
+  /**
+   * Updates the signed-in user's own display name. The server derives the identity from the JWT, so
+   * only `userName` is sent. On success the new name is written back to the session profile and signal,
+   * so the shell (and anything reading `userName`) refreshes immediately.
+   */
+  updateProfile(userName: string): Observable<ProfileResponse> {
+    return this.http.put<ProfileResponse>(this.profileUrl, { userName }).pipe(
+      tap(response => this.applyUserName(response.userName))
+    );
+  }
+
+  /** Refreshes just the userName in the persisted profile + signal, leaving token and roles intact. */
+  private applyUserName(userName: string): void {
+    const current = this.profileSignal();
+    if (!current) {
+      return;
+    }
+    const updated: AuthProfile = { ...current, userName };
+    sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated));
+    this.profileSignal.set(updated);
   }
 
   /** Persists the profile (with roles decoded from the token) to session storage. */

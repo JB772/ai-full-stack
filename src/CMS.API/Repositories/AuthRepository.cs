@@ -61,4 +61,29 @@ public class AuthRepository(IDbConnectionFactory connectionFactory) : IAuthRepos
 
         return value.GetString()!;
     }
+
+    public async Task<AuthenticatedUser?> UpdateUserNameAsync(string userId, string userName)
+    {
+        using var conn = connectionFactory.CreateConnection();
+
+        // 依 UserId (自然主鍵) 更新 UserName，再讀回可對外的欄位；查無此帳號時 SELECT 回傳 null。
+        const string sql = """
+            UPDATE AppUser SET UserName = @UserName WHERE UserId = @UserId;
+            SELECT UserId, UserName FROM AppUser WHERE UserId = @UserId;
+            """;
+
+        var user = await conn.QuerySingleOrDefaultAsync<AuthenticatedUser>(
+            sql, new { UserId = userId, UserName = userName });
+
+        if (user is null)
+        {
+            return null;
+        }
+
+        const string rolesSql = "SELECT RoleId FROM AppUserRole WHERE UserId = @UserId ORDER BY RoleId";
+        var roles = await conn.QueryAsync<string>(rolesSql, new { user.UserId });
+        user.RoleIds = roles.ToList();
+
+        return user;
+    }
 }

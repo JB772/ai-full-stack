@@ -88,6 +88,16 @@ describe('App', () => {
     expect(sidebar.querySelector('.logout-button')).toBeTruthy();
   });
 
+  it('shows a My Profile link pointing at /profile in the shell', () => {
+    signIn(['Admin']);
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+
+    const link = fixture.nativeElement.querySelector('.profile-link') as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link.getAttribute('href')).toBe('/profile');
+  });
+
   it('renders only the login outlet (no sidebar) when signed out', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();

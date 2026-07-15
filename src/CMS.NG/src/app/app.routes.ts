@@ -14,6 +14,11 @@ export const routes: Routes = [
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'app-roles' },
       {
+        path: 'profile',
+        loadComponent: () => import('./features/auth/profile/profile').then(m => m.Profile),
+        title: '我的個人資料 My Profile'
+      },
+      {
         path: 'app-roles',
         loadComponent: () =>
           import('./features/app-roles/app-role-list/app-role-list').then(m => m.AppRoleList),
