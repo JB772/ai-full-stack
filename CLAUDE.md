@@ -12,9 +12,9 @@ a table's shape before writing code against it.
 |------|------|
 | `database/*.sql` | The schema (auth, admin, course, promotion). Reference only — already deployed. |
 | `spec/code-gen.convention.md` | **The** code-generation convention. Read it before adding any feature. |
-| `spec/sample1.spec.md`, `sample2.spec.md` | Worked examples of a feature spec (Course, SkillTrain). Aspirational — see the RowAudit gotcha. |
+| `spec/sample1.spec.md`, `sample2.spec.md` | Worked examples of a feature spec (Course, SkillTrain). **Aspirational** — see the RowAudit gotcha. `sample1` is a much richer Course than what shipped; the real, built spec is `spec/course/Course.md`. Don't conflate them. |
 | `spec/feature-spec.template.md` | Template for new feature specs. |
-| `spec/{sub-system}/{Table}.md` | Generated feature specs (e.g. `spec/admin/PublishStatus.md`). |
+| `spec/{sub-system}/{Table}.md` | Generated feature specs (e.g. `spec/admin/PublishStatus.md`, `spec/course/Course.md`). |
 | `spec/ui-sample-*.png` | UI style reference only — not actual content. |
 | `src/CMS.API` | .NET 9 Web API, Dapper, Swagger. Port 5000. |
 | `src/CMS.API.Tests` | xUnit. |
@@ -104,6 +104,37 @@ directly, and the API's CORS policy allows any localhost origin.
     cascading on into *their* children. `CourseGroupsController.Delete` checks `CourseCount` before the
     DELETE ever reaches SQL Server, and that check is load-bearing. Grep the `ALTER TABLE … ADD CONSTRAINT`
     block for `ON DELETE CASCADE` before writing any delete path.
+- **`Course` is the first table with outbound FKs, so it is the first to multi-map nav objects.** Every
+  other built table (AppRole, PublishStatus, Partner, CourseGroup) has *no* outbound FK, so before Course
+  there was no multi-map anywhere. `CourseRepository` JOINs Partner / CourseGroup / PublishStatus and
+  returns nested nav objects (`course.partner.name`, etc.). Points that bite:
+  - The response model carries **purpose-built slim nav classes** (`CourseNavPartner { Pkid, Name }`,
+    `CourseNavCourseGroup`, `CourseNavPublishStatus`) — *not* the full `Partner` / `CourseGroup` models.
+    Reusing the full models would drag their own count subqueries into the JOIN for nothing.
+  - `splitOn: "pkid,pkid,pkid"` — one entry per nav object. Keep all Course columns (scalars, aliased
+    `Partner_pkid AS PartnerPkid`, the six count subqueries) *before* the first `p.pkid` in the SELECT, or
+    the split lands in the wrong place.
+  - `CourseGroup_pkid` is **nullable → `LEFT JOIN`**, and Dapper yields a **null** nav object (not an empty
+    one) when the id is null. `GetByPkidAsync` uses `QueryAsync(...).SingleOrDefault()`, not
+    `QuerySingleOrDefaultAsync`, because the multi-map overload has no single-row variant.
+  - Frontend: **there is no lookup service.** The list filter drawer and the form dropdowns load their FK
+    options by `forkJoin`-ing the existing feature services (`PartnerService.getAll()`,
+    `CourseGroupService.getAll()`, `PublishStatusService.getAll()`). The list/detail **display** labels
+    come straight off the nav objects, so they don't depend on the lookups resolving.
+  - `date` columns (`ScheduleOn` / `ScheduleOff`) ⇄ PrimeNG `p-datepicker` go through
+    `features/courses/date.util.ts` (`toIsoDate` / `fromIsoDate`, **local** components — never
+    `toISOString()`, which shifts to UTC and lands the wrong day for UTC+8).
+- **A plain `int` IDENTITY PK needs no route range-check.** `Course.pkid` is a real `int` IDENTITY with
+  *no* separate natural key (unlike `AppRole`, which is `int` IDENTITY **plus** an immutable `RoleId`). So
+  the controller route is `{id:int}` binding straight to `int` — no `TryToPkid` helper like the smallint
+  (`Partner`) / tinyint (`PublishStatus`) controllers need. PUT still guards `pkid <= 0 → 400`, and the
+  form has no pkid control (DB-generated, immutable on edit — same as `Partner`).
+- **`Course`'s N-N is deferred, but its cascade junctions are still in the delete guard.**
+  `CourseInCertification` and `CourseJobCategories` are genuine junctions, but membership *editing* is not
+  built (no `certifications` / `job-categories` lookup endpoints exist, and no N-N reference feature does).
+  Both are `ON DELETE CASCADE` on `Course_pkid`, so `CoursesController.DescribeBlockers` counts them anyway
+  — otherwise deleting a course would silently destroy the junction rows. The guard spans six children
+  (FAQ, certifications, job categories, related links, hot-course, and `CourseRecomm` by `CourseId`).
 - **Don't invent constraints the schema doesn't have.** `Partner.AppKey` reads like a natural key, but
   there is no UNIQUE index on it — only `PK_Partner` on `pkid` — so the API adds **no** duplicate-AppKey
   409, and `AppKey` is freely editable. Contrast `AppRole.RoleId`, which really is a clustered PK and
@@ -152,19 +183,22 @@ directly, and the API's CORS policy allows any localhost origin.
 ## Adding a feature
 
 Built so far: **AppRole** (`/api/app-roles`), **PublishStatus** (`/api/publish-statuses`),
-**Partner** (`/api/partners`) and **CourseGroup** (`/api/course-groups`). Use those as the reference
-implementation — the sample specs describe a richer system than what exists. Pick the one whose PK
-matches the table you're adding:
+**Partner** (`/api/partners`), **CourseGroup** (`/api/course-groups`) and **Course** (`/api/courses`).
+Use those as the reference implementation — the sample specs describe a richer system than what exists.
+Pick the one whose PK matches the table you're adding:
 
 | Reference | PK shape | Copy it when… |
 |-----------|----------|---------------|
 | `AppRole` | `int` IDENTITY + a separate immutable natural key | the table has a business key other tables FK to |
 | `PublishStatus` | `tinyint`, **no** IDENTITY | the *user* supplies the key |
 | `Partner` | `smallint` IDENTITY | the DB generates the key (the common case) |
+| `Course` | `int` IDENTITY (plain) | the table has **outbound FKs** (nav objects via multi-map) |
 
 `Partner` is also the reference for a multi-child delete guard and for a table with no outbound FKs.
 `CourseGroup` is the reference for a **cascading** FK — the case where the delete guard is the only thing
 preventing data loss — and for a single-column table (one form field, keyword-only filter; don't pad it).
+`Course` is the reference for **outbound FKs**: Dapper multi-map nav objects, a nullable-FK `LEFT JOIN`,
+FK dropdowns fed by `forkJoin` of existing feature services, and `date` ⇄ `p-datepicker` conversion.
 
 1. Read the table in `database/*.sql` and write a spec from `spec/feature-spec.template.md`,
    saved to `spec/{sub-system}/{Table}.md`. Check whether `pkid` is really an IDENTITY.

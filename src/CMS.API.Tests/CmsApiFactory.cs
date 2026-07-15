@@ -27,6 +27,9 @@ public class CmsApiFactory : WebApplicationFactory<Program>
 
             services.RemoveAll<ICourseGroupRepository>();
             services.AddSingleton<ICourseGroupRepository, InMemoryCourseGroupRepository>();
+
+            services.RemoveAll<ICourseRepository>();
+            services.AddSingleton<ICourseRepository, InMemoryCourseRepository>();
         });
     }
 }
