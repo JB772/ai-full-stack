@@ -5,8 +5,10 @@
 > an `int` IDENTITY `pkid` **plus** an immutable natural key (`UserId`) that another table
 > (`AppUserRole`) foreign-keys to. Two deliberate scope decisions:
 > - **`PasswordHash` is backend-only** — never sent to or received from the frontend, never in
->   `AppUserRequest` or any Angular model. It is seeded from `SysConfig` on create and only changed
->   through a dedicated **reset-password** endpoint (details below).
+>   `AppUserRequest` or any Angular model. It is seeded from `SysConfig` on create and changed only
+>   server-side: by the owner via self-service change-password, or reset to the system default by an
+>   **Admin** via `POST /api/auth/reset-password` (details in **Reset password to default** below; the
+>   full auth/JWT/password surface is in `docs/auth.md` and `spec/auth/auth-login.spec.md`).
 > - **The `AppUserRole` N-N (user ↔ role) editor is deferred**, exactly as every other table in this
 >   repo defers N-N editing (see `Course.md`). `AppUserRole` is still **counted in the delete guard**
 >   so a user with role assignments returns a clean **409** instead of a raw FK violation. This is the
@@ -121,11 +123,78 @@ upgrade, symmetric with `AppRole`'s `UserCount` guard.
   default password — it has not been *updated* yet).
 - **On UPDATE**: `PasswordHash` and `PasswordUpdatedTime` are **never touched** by the normal update
   (only `UserName` and `IsActive` are written).
-- **Reset password**: `POST /api/app-users/{id:int}/reset-password` re-reads `defaultPassword` from
-  `SysConfig`, SHA-256 hashes it, writes `PasswordHash`, and stamps `PasswordUpdatedTime = SYSDATETIME()`.
-  No request body — the raw password never crosses the API boundary. `204` on success, `404` if the
-  user does not exist.
+- **Reset password to default** (Admin-only): re-reads `defaultPassword` from `SysConfig`, SHA-256
+  hashes it, writes `PasswordHash`, and stamps `PasswordUpdatedTime = SYSDATETIME()`. The raw password
+  never crosses the API boundary. Full design in **Reset password to default** below.
 - Hashing is a small static helper (`PasswordHasher.Hash`) so it can be unit-tested deterministically.
+
+---
+
+## Reset password to default (Admin-only)
+
+Resets a **target** user's password back to the system default. Lives on **`AuthController`**, not
+`AppUsersController` — it is an auth/password concern that reuses the auth signing/hashing machinery, and
+consolidating it there keeps every password mutation in one place (`docs/auth.md`).
+
+### Access control
+
+- **Admin-only, enforced on the server**: `[Authorize(Roles = "Admin")]`. A non-Admin authenticated
+  caller gets **403 Forbidden** (the role claim check), an unauthenticated caller **401**. Hiding the
+  button in the UI is *not* the control — the endpoint enforces it independently.
+- The `Admin` role comes from the caller's JWT `role` claim (validated with `RoleClaimType = "role"`).
+
+### Endpoint
+
+| Method | Route | Body | Success | Errors |
+|--------|-------|------|---------|--------|
+| `POST` | `/api/auth/reset-password` | `ResetPasswordRequest { userId }` | **204** (empty body) | 400 (blank `userId`) · 401 (no token) · 403 (not Admin) · 404 (unknown user) |
+
+- **Target identity comes from the body**, not the JWT — an admin is resetting *someone else's*
+  password, so the JWT identifies the **caller** (for the role check) while `userId` names the **target**.
+  This is the deliberate opposite of self-service profile/change-password, where identity is JWT-only.
+- **No password or hash crosses the wire in either direction**: the request is just `{ userId }`, and
+  success returns an empty 204.
+
+### Backend flow (`AuthController.ResetPassword` → `IAuthRepository.ResetPasswordToDefaultAsync`)
+
+1. Trim `userId`; empty/whitespace → **400** (`{ message: "UserId is required" }`).
+2. `ResetPasswordToDefaultAsync(userId)` reads `defaultPassword` from `SysConfig['appConfig']` **at
+   runtime** (its own private `GetDefaultPasswordAsync`, same JSON-blob path `AppUserRepository` uses on
+   create), SHA-256 hashes it, and:
+
+```sql
+UPDATE AppUser
+SET PasswordHash = @PasswordHash, PasswordUpdatedTime = SYSDATETIME()
+WHERE UserId = @UserId;
+```
+
+3. Rows affected `> 0` → **204**; `0` (no such user) → **404**.
+
+> **Supersedes the old path.** An earlier unguarded `POST /api/app-users/{id:int}/reset-password` (keyed
+> by `pkid`, on `AppUsersController`) together with `IAppUserRepository.ResetPasswordAsync` and its
+> fake/tests were **removed**. Do not reintroduce a second reset path.
+
+### Frontend
+
+- `AuthService.resetPasswordToDefault(userId: string): Observable<void>` → POSTs `{ userId }`; touches
+  **no** session state (the admin's own token/profile are unaffected). `AppUserService` has **no**
+  reset method.
+- An **Admin-only** **重設密碼** button (shown only when `AuthService.isAdmin`) appears on **both**:
+  - the AppUser **edit form** (`app-user-form`, edit mode only — hidden in add mode), and
+  - the **detail** page (`app-user-detail`).
+  Each opens a `ConfirmationService.confirm` dialog and, on accept, sends only the account's natural-key
+  `UserId` (never a password, never the `pkid`). Success/failure surface as a toast.
+
+### Tests
+
+- Backend `ResetPasswordTests`: non-Admin → **403** and nothing changes; Admin → **204**, stored hash =
+  `SHA256(defaultPassword)`, `PasswordUpdatedTime` stamped, and no hash/password in the response (also
+  verified end-to-end by logging in with the default); unknown user → **404**; no token → **401**; blank
+  `userId` → **400**. The live `SysConfig` lookup isn't covered — the `InMemoryAuthRepository` fake
+  supplies a known `DefaultPassword`, and the non-Admin case uses
+  `CreateAuthenticatedClient(..., "Editor")` (a bare token defaults to the `Admin` role).
+- Angular: the reset button renders only for Admins (on the form and the detail page) and is hidden in
+  add mode; the confirm→reset flow calls `resetPasswordToDefault(userId)` and surfaces success/error.
 
 ---
 
@@ -149,10 +218,12 @@ upgrade, symmetric with `AppRole`'s `UserCount` guard.
 | `POST` | `/api/app-users` | Create; 409 on duplicate `UserId`; password seeded from `SysConfig` |
 | `PUT` | `/api/app-users` | Update (pkid from body; `<= 0` → 400; unknown → 404). `UserId`/password unchanged. |
 | `DELETE` | `/api/app-users/{id:int}` | Delete; 409 if `RoleCount > 0` |
-| `POST` | `/api/app-users/{id:int}/reset-password` | Reset password to default; 204 / 404. No body. |
 
 `{id:int}` binds directly — `pkid` is a real `int` IDENTITY, so no range-check helper is needed
 (same as `AppRole` / `Course`; contrast the smallint/tinyint controllers).
+
+Password reset is **not** an `app-users` route — it lives on `AuthController` as the Admin-only
+`POST /api/auth/reset-password` (see **Reset password to default** above).
 
 ---
 
@@ -198,12 +269,14 @@ WHERE pkid = @Pkid;
 ```
 `UserId` (natural key) and `PasswordHash` / `PasswordUpdatedTime` are intentionally omitted.
 
-### SQL — reset password
+### SQL — reset password (in `AuthRepository`, not `AppUserRepository`)
+
+Keyed by the natural key `UserId` (the auth endpoint takes `userId`, not `pkid`):
 
 ```sql
 UPDATE AppUser
 SET PasswordHash = @PasswordHash, PasswordUpdatedTime = SYSDATETIME()
-WHERE pkid = @Pkid;
+WHERE UserId = @UserId;
 ```
 
 ### SQL — default password lookup
@@ -255,8 +328,9 @@ No password field anywhere.
 
 ### Service (`app-user.service.ts`)
 
-Standard six methods + `resetPassword(pkid: number): Observable<void>` →
-`POST /api/app-users/{pkid}/reset-password` (no body).
+Standard CRUD methods only (`getAll`, `query`, `getByPkid`, `create`, `update`, `delete`). **No reset
+method** — password reset is `AuthService.resetPasswordToDefault(userId)` (see **Reset password to
+default**).
 
 ### List
 
@@ -267,13 +341,16 @@ Filter drawer: keyword input + `IsActive` tri-state `p-select` (全部 / 啟用 
 
 ### Detail
 
-Field grid mirroring the list, plus a **重設密碼** button (calls `resetPassword`, confirms first,
-reloads on success) alongside 返回 / 編輯.
+Field grid mirroring the list, alongside 返回 / 編輯. An **Admin-only** **重設密碼** button (shown only
+when `AuthService.isAdmin`) confirms first, calls `AuthService.resetPasswordToDefault(userId)`, and
+reloads on success. See **Reset password to default**.
 
 ### Form
 
 Reactive form: `userId` (immutable — `disable()` on edit, hint text), `userName` (required),
 `isActive` (`p-checkbox [binary]`, default `true`). **No password control.** No pkid control (IDENTITY).
+On **edit** only, an **Admin-only** **重設密碼** button (gated on `AuthService.isAdmin`) sits in the
+toolbar — same confirm→reset flow as the detail page.
 
 ### Session Storage Keys
 
@@ -303,3 +380,9 @@ Add 使用者 AppUser under the existing **系統管理 Admin** group in `app.ts
 **Tests:** `CMS.API.Tests/Fakes/InMemoryAppUserRepository.cs`, `CMS.API.Tests/AppUsersControllerTests.cs`,
 `CMS.API.Tests/PasswordHasherTests.cs`, register the fake in `CmsApiFactory.cs`;
 `app-user.service.spec.ts`, `app-user-list.spec.ts`, `app-user-detail.spec.ts`, `app-user-form.spec.ts`.
+
+**Reset-password (Admin-only) surface** — on the auth stack, not `app-users`: `Models/ResetPasswordRequest.cs`,
+`IAuthRepository.ResetPasswordToDefaultAsync` + `AuthRepository` impl, `AuthController.ResetPassword`;
+frontend `AuthService.resetPasswordToDefault` (+ `ResetPasswordRequest` model) and the Admin-gated buttons
+in `app-user-form` / `app-user-detail`; tests `CMS.API.Tests/ResetPasswordTests.cs` +
+`InMemoryAuthRepository` fake and the Angular form/detail button specs. Full design in `docs/auth.md`.

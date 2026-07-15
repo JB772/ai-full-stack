@@ -37,3 +37,12 @@ export interface ChangePasswordRequest {
   newPassword: string;
   confirmNewPassword: string;
 }
+
+/**
+ * Body posted to POST /api/Auth/reset-password (Admin only). Resets the target account's password to
+ * the system default. Only the target userId is sent — no password or hash crosses the API in either
+ * direction (the default is read from SysConfig server-side; success returns an empty 204).
+ */
+export interface ResetPasswordRequest {
+  userId: string;
+}

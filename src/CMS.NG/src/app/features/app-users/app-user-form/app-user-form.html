@@ -6,6 +6,15 @@
 
     <div class="page-actions">
       <p-button label="取消" icon="pi pi-times" severity="secondary" type="button" (onClick)="cancel()" />
+      @if (isEdit() && isAdmin()) {
+        <p-button
+          label="重設密碼"
+          icon="pi pi-key"
+          severity="warn"
+          type="button"
+          [loading]="resetting()"
+          (onClick)="confirmResetPassword()" />
+      }
       <p-button label="儲存" icon="pi pi-check" severity="success" type="submit" [loading]="saving()" />
     </div>
   </div>

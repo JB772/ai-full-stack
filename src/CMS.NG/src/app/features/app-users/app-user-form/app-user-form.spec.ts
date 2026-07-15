@@ -1,15 +1,18 @@
+import { WritableSignal, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { MessageService } from 'primeng/api';
+import { ConfirmationService, MessageService, Confirmation } from 'primeng/api';
 import { of, throwError } from 'rxjs';
 import { AppUserForm } from './app-user-form';
 import { AppUserService } from '../app-user.service';
+import { AuthService } from '../../auth/auth.service';
 import { AppUser } from '../app-user.model';
 
 describe('AppUserForm', () => {
   let fixture: ComponentFixture<AppUserForm>;
   let service: jasmine.SpyObj<AppUserService>;
+  let auth: { isAdmin: WritableSignal<boolean>; resetPasswordToDefault: jasmine.Spy };
   let router: Router;
 
   const guest: AppUser = {
@@ -21,12 +24,16 @@ describe('AppUserForm', () => {
     roleCount: 0
   };
 
-  /** `id` = null → add mode; a value → edit mode. */
-  async function setup(id: string | null) {
+  /** `id` = null → add mode; a value → edit mode. `isAdmin` toggles the reset-password button. */
+  async function setup(id: string | null, isAdmin = true) {
     service = jasmine.createSpyObj<AppUserService>('AppUserService', ['getByPkid', 'create', 'update']);
     service.getByPkid.and.returnValue(of(guest));
     service.create.and.returnValue(of({ ...guest, pkid: 3, userId: 'editor' }));
     service.update.and.returnValue(of(void 0));
+    auth = {
+      isAdmin: signal(isAdmin),
+      resetPasswordToDefault: jasmine.createSpy('resetPasswordToDefault').and.returnValue(of(void 0))
+    };
 
     await TestBed.configureTestingModule({
       imports: [AppUserForm],
@@ -34,7 +41,9 @@ describe('AppUserForm', () => {
         provideRouter([]),
         provideNoopAnimations(),
         MessageService,
+        ConfirmationService,
         { provide: AppUserService, useValue: service },
+        { provide: AuthService, useValue: auth },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map(id ? [['id', id]] : []) } } }
       ]
     }).compileComponents();
@@ -146,6 +155,67 @@ describe('AppUserForm', () => {
       api().cancel();
 
       expect(navigate).toHaveBeenCalledWith(['/app-users', 2]);
+    });
+  });
+
+  describe('reset password to default', () => {
+    it('shows the button for Admins in edit mode', async () => {
+      await setup('2', true);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('重設密碼');
+    });
+
+    it('hides the button for non-Admins', async () => {
+      await setup('2', false);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).not.toContain('重設密碼');
+    });
+
+    it('hides the button in add mode even for Admins', async () => {
+      await setup(null, true);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).not.toContain('重設密碼');
+    });
+
+    it('resets by userId after confirmation, sending no password', async () => {
+      await setup('2', true);
+      fixture.detectChanges();
+      const confirmationService = TestBed.inject(ConfirmationService);
+      spyOn(confirmationService, 'confirm').and.callFake((c: Confirmation) => {
+        c.accept?.();
+        return confirmationService;
+      });
+      const messageService = TestBed.inject(MessageService);
+      spyOn(messageService, 'add');
+
+      api().confirmResetPassword();
+
+      // The natural-key userId is sent — never the pkid, never a password.
+      expect(auth.resetPasswordToDefault).toHaveBeenCalledWith('guest');
+      expect(messageService.add).toHaveBeenCalledWith(jasmine.objectContaining({ severity: 'success' }));
+    });
+
+    it('surfaces a reset failure and clears the resetting flag', async () => {
+      await setup('2', true);
+      fixture.detectChanges();
+      const confirmationService = TestBed.inject(ConfirmationService);
+      spyOn(confirmationService, 'confirm').and.callFake((c: Confirmation) => {
+        c.accept?.();
+        return confirmationService;
+      });
+      auth.resetPasswordToDefault.and.returnValue(throwError(() => ({ error: { message: '重設密碼時發生錯誤。' } })));
+      const messageService = TestBed.inject(MessageService);
+      spyOn(messageService, 'add');
+
+      api().confirmResetPassword();
+
+      expect(messageService.add).toHaveBeenCalledWith(
+        jasmine.objectContaining({ severity: 'error', detail: '重設密碼時發生錯誤。' })
+      );
+      expect(api().resetting()).toBeFalse();
     });
   });
 });

@@ -23,9 +23,12 @@ FKs to. What's new is `PasswordHash`:
   (`Security/PasswordHasher.Hash`, uppercase hex), and stores it. `PasswordUpdatedTime` stays **NULL**
   on create (default password = "not yet updated"). UPDATE touches neither column.
 - **Two write paths for the hash, both stamping `PasswordUpdatedTime = SYSDATETIME()`:**
-  - **Admin reset — `POST /api/app-users/{id}/reset-password`** (`AppUserRepository`): no request body,
-    so the raw password never crosses the API; it re-seeds from the `SysConfig` default. The frontend
-    exposes it as a 重設密碼 button on the detail page — no password field in that UI.
+  - **Admin reset — `POST /api/auth/reset-password`** (`AuthRepository.ResetPasswordToDefaultAsync`,
+    `[Authorize(Roles = "Admin")]` → 403 for non-Admins): the body is only `{ userId }` (the target
+    account), so the raw password never crosses the API; it re-seeds from the `SysConfig` default. The
+    frontend exposes it as an **Admin-only** 重設密碼 button (gated on `AuthService.isAdmin`) on both the
+    AppUser edit form and detail page — no password field in that UI. (This replaced an earlier unguarded
+    `POST /api/app-users/{id}/reset-password`, since removed.)
   - **Self-service change — `POST /api/auth/change-password`** (`AuthRepository.UpdatePasswordAsync`,
     identity from the JWT): the signed-in user supplies current + new + confirm; the raw passwords are
     hashed server-side and never returned. Complexity is enforced by `Security/PasswordPolicy`. See the

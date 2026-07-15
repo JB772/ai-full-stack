@@ -63,6 +63,23 @@ describe('AuthService', () => {
     expect(service.isAdmin()).toBeFalse();
   });
 
+  it('POSTs only the target userId to the reset-password endpoint (no password/session change)', () => {
+    const token = fakeJwt({ userId: 'admin', userName: 'admin', role: 'Admin' });
+    service.login({ userId: 'admin', password: 'x' }).subscribe();
+    httpMock.expectOne(loginUrl).flush({ userId: 'admin', userName: '系統管理員', accessToken: token });
+
+    service.resetPasswordToDefault('editor').subscribe();
+
+    const req = httpMock.expectOne(`${environment.apiBaseUrl}/Auth/reset-password`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ userId: 'editor' });
+    req.flush(null);
+
+    // The admin's own session is untouched by resetting someone else's password.
+    expect(service.userName()).toBe('系統管理員');
+    expect(service.token).toBe(token);
+  });
+
   it('logout clears session storage and the auth state', () => {
     const token = fakeJwt({ role: 'Admin' });
     service.login({ userId: 'admin', password: 'x' }).subscribe();

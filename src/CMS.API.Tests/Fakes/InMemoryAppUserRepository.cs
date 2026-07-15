@@ -6,9 +6,10 @@ namespace CMS.API.Tests.Fakes;
 /// <summary>
 /// Stands in for <see cref="AppUserRepository"/> so the API endpoints can be exercised without SQL
 /// Server (or a SysConfig row). Mirrors the SQL semantics: UserId uniqueness, keyword LIKE across
-/// UserId/UserName, IsActive filter, UserId immutable on update, PasswordHash never surfaced, and
-/// reset-password stamping PasswordUpdatedTime. The default-password/SysConfig lookup lives only in
-/// the real Dapper repository, so it is intentionally absent here — Create just seeds a new account.
+/// UserId/UserName, IsActive filter, UserId immutable on update, and PasswordHash never surfaced.
+/// The default-password/SysConfig lookup lives only in the real Dapper repository, so it is
+/// intentionally absent here — Create just seeds a new account. (Reset-to-default is an Admin-only
+/// AuthController action keyed by UserId — see InMemoryAuthRepository — not an AppUser endpoint.)
 /// </summary>
 public class InMemoryAppUserRepository : IAppUserRepository
 {
@@ -100,18 +101,6 @@ public class InMemoryAppUserRepository : IAppUserRepository
 
     public Task<int> GetRoleCountAsync(int pkid)
         => Task.FromResult(_users.SingleOrDefault(u => u.Pkid == pkid)?.RoleCount ?? 0);
-
-    public Task<bool> ResetPasswordAsync(int pkid)
-    {
-        var user = _users.SingleOrDefault(u => u.Pkid == pkid);
-        if (user is null)
-        {
-            return Task.FromResult(false);
-        }
-
-        user.PasswordUpdatedTime = DateTime.Now;
-        return Task.FromResult(true);
-    }
 
     private static AppUser Clone(AppUser u) => new()
     {

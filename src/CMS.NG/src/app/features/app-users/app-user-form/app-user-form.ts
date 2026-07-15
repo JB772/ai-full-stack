@@ -4,9 +4,10 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { CheckboxModule } from 'primeng/checkbox';
-import { MessageService } from 'primeng/api';
+import { ConfirmationService, MessageService } from 'primeng/api';
 import { AppUserRequest } from '../app-user.model';
 import { AppUserService } from '../app-user.service';
+import { AuthService } from '../../auth/auth.service';
 
 @Component({
   selector: 'app-app-user-form',
@@ -20,10 +21,17 @@ export class AppUserForm implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly messageService = inject(MessageService);
+  private readonly confirmationService = inject(ConfirmationService);
+  private readonly authService = inject(AuthService);
 
   protected readonly isEdit = signal(false);
   protected readonly loading = signal(false);
   protected readonly saving = signal(false);
+  protected readonly resetting = signal(false);
+
+  // Reset-Password-to-Default is an Admin-only action; the button is hidden for non-Admins (and the
+  // backend enforces the Admin role regardless — hiding the button is not the security control).
+  protected readonly isAdmin = this.authService.isAdmin;
 
   private pkid = 0;
 
@@ -109,6 +117,40 @@ export class AppUserForm implements OnInit {
 
   protected cancel(): void {
     this.router.navigate(this.isEdit() ? ['/app-users', this.pkid] : ['/app-users']);
+  }
+
+  /** Confirm, then reset the edited account's password to the system default (Admin only). */
+  protected confirmResetPassword(): void {
+    // UserId is the natural key; the disabled control still surfaces via getRawValue().
+    const userId = this.form.getRawValue().userId;
+    if (!this.isEdit() || !userId) {
+      return;
+    }
+
+    this.confirmationService.confirm({
+      header: '重設密碼確認',
+      message: `確定要將使用者「${userId}」的密碼重設為系統預設值？`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: '重設',
+      rejectLabel: '取消',
+      accept: () => this.resetPassword(userId)
+    });
+  }
+
+  private resetPassword(userId: string): void {
+    // Only the target userId is sent — no password/hash ever crosses the API.
+    this.resetting.set(true);
+    this.authService.resetPasswordToDefault(userId).subscribe({
+      next: () => {
+        this.resetting.set(false);
+        this.messageService.add({ severity: 'success', summary: '重設成功', detail: `使用者「${userId}」的密碼已重設為預設值。` });
+      },
+      error: err => {
+        this.resetting.set(false);
+        const detail = err?.error?.message ?? '重設密碼時發生錯誤。';
+        this.messageService.add({ severity: 'error', summary: '重設失敗', detail });
+      }
+    });
   }
 
   private handleError(err: { error?: { message?: string } }): void {

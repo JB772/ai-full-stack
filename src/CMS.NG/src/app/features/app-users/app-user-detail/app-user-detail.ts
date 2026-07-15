@@ -6,6 +6,7 @@ import { TagModule } from 'primeng/tag';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { AppUser } from '../app-user.model';
 import { AppUserService } from '../app-user.service';
+import { AuthService } from '../../auth/auth.service';
 
 @Component({
   selector: 'app-app-user-detail',
@@ -19,10 +20,15 @@ export class AppUserDetail implements OnInit {
   private readonly router = inject(Router);
   private readonly messageService = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
+  private readonly authService = inject(AuthService);
 
   protected readonly user = signal<AppUser | null>(null);
   protected readonly loading = signal(false);
   protected readonly resetting = signal(false);
+
+  // Reset-Password-to-Default is Admin-only; the button is hidden for non-Admins (the backend enforces
+  // the Admin role regardless).
+  protected readonly isAdmin = this.authService.isAdmin;
 
   ngOnInit(): void {
     const pkid = Number(this.route.snapshot.paramMap.get('id'));
@@ -65,8 +71,9 @@ export class AppUserDetail implements OnInit {
   }
 
   private resetPassword(user: AppUser): void {
+    // Only the target userId is sent — no password/hash ever crosses the API.
     this.resetting.set(true);
-    this.service.resetPassword(user.pkid).subscribe({
+    this.authService.resetPasswordToDefault(user.userId).subscribe({
       next: () => {
         this.resetting.set(false);
         this.messageService.add({ severity: 'success', summary: '重設成功', detail: `使用者「${user.userId}」的密碼已重設為預設值。` });

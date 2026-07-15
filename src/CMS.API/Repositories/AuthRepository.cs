@@ -1,6 +1,8 @@
+using System.Data;
 using System.Text.Json;
 using CMS.API.Data;
 using CMS.API.Models;
+using CMS.API.Security;
 using Dapper;
 
 namespace CMS.API.Repositories;
@@ -91,7 +93,7 @@ public class AuthRepository(IDbConnectionFactory connectionFactory) : IAuthRepos
     {
         using var conn = connectionFactory.CreateConnection();
 
-        // 只寫入雜湊，順帶記錄變更時間。用 SYSDATETIME() 與既有的 reset-password 路徑 (AppUserRepository) 一致。
+        // 只寫入雜湊，順帶記錄變更時間。用 SYSDATETIME() 與 ResetPasswordToDefaultAsync 一致。
         const string sql = """
             UPDATE AppUser
             SET PasswordHash = @PasswordHash, PasswordUpdatedTime = SYSDATETIME()
@@ -100,5 +102,45 @@ public class AuthRepository(IDbConnectionFactory connectionFactory) : IAuthRepos
 
         var affected = await conn.ExecuteAsync(sql, new { UserId = userId, PasswordHash = newPasswordHash });
         return affected > 0;
+    }
+
+    public async Task<bool> ResetPasswordToDefaultAsync(string userId)
+    {
+        using var conn = connectionFactory.CreateConnection();
+
+        // 預設密碼於執行期由 SysConfig 讀取 (與 AppUserRepository 建立帳號的路徑一致)，再 SHA256 雜湊。
+        var passwordHash = PasswordHasher.Hash(await GetDefaultPasswordAsync(conn));
+
+        // 只寫入雜湊，順帶記錄變更時間。用 SYSDATETIME() 與既有的 change/reset-password 路徑一致。
+        const string sql = """
+            UPDATE AppUser
+            SET PasswordHash = @PasswordHash, PasswordUpdatedTime = SYSDATETIME()
+            WHERE UserId = @UserId
+            """;
+
+        var affected = await conn.ExecuteAsync(sql, new { UserId = userId, PasswordHash = passwordHash });
+        return affected > 0;
+    }
+
+    /// <summary>讀取 SysConfig['appConfig'] (JSON) 並取出其 `defaultPassword` 屬性。</summary>
+    private static async Task<string> GetDefaultPasswordAsync(IDbConnection conn)
+    {
+        var json = await conn.ExecuteScalarAsync<string?>(
+            "SELECT configValue FROM SysConfig WHERE configKey = @Key", new { Key = "appConfig" });
+
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            throw new InvalidOperationException("找不到系統設定 appConfig，無法取得預設密碼。");
+        }
+
+        using var doc = JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("defaultPassword", out var value)
+            || value.ValueKind != JsonValueKind.String
+            || string.IsNullOrEmpty(value.GetString()))
+        {
+            throw new InvalidOperationException("系統設定 appConfig 缺少 defaultPassword。");
+        }
+
+        return value.GetString()!;
     }
 }

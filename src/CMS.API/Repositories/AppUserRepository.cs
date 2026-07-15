@@ -121,21 +121,6 @@ public class AppUserRepository(IDbConnectionFactory connectionFactory) : IAppUse
         return await conn.ExecuteScalarAsync<int>(sql, new { Pkid = pkid });
     }
 
-    public async Task<bool> ResetPasswordAsync(int pkid)
-    {
-        using var conn = connectionFactory.CreateConnection();
-        var passwordHash = PasswordHasher.Hash(await GetDefaultPasswordAsync(conn));
-
-        const string sql = """
-            UPDATE AppUser
-            SET PasswordHash = @PasswordHash,
-                PasswordUpdatedTime = SYSDATETIME()
-            WHERE pkid = @Pkid;
-            """;
-
-        return await conn.ExecuteAsync(sql, new { Pkid = pkid, PasswordHash = passwordHash }) > 0;
-    }
-
     /// <summary>Reads SysConfig['appConfig'] (a JSON blob) and returns its `defaultPassword` property.</summary>
     private static async Task<string> GetDefaultPasswordAsync(IDbConnection conn)
     {

@@ -98,13 +98,4 @@ describe('AppUserService', () => {
     expect(req.request.method).toBe('DELETE');
     req.flush(null);
   });
-
-  it('POSTs to the reset-password endpoint with no password payload', () => {
-    service.resetPassword(1).subscribe();
-
-    const req = httpMock.expectOne(`${baseUrl}/1/reset-password`);
-    expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({});
-    req.flush(null);
-  });
 });

@@ -210,27 +210,6 @@ public class AppUsersControllerTests : IDisposable
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    // ---------- Reset password ----------
-
-    [Fact]
-    public async Task ResetPassword_ExistingUser_Returns204AndStampsUpdatedTime()
-    {
-        var before = await _client.GetFromJsonAsync<AppUser>("/api/app-users/1");
-        Assert.Null(before!.PasswordUpdatedTime);
-
-        var response = await _client.PostAsync("/api/app-users/1/reset-password", null);
-
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-
-        var after = await _client.GetFromJsonAsync<AppUser>("/api/app-users/1");
-        Assert.NotNull(after!.PasswordUpdatedTime);
-    }
-
-    [Fact]
-    public async Task ResetPassword_MissingUser_Returns404()
-    {
-        var response = await _client.PostAsync("/api/app-users/999/reset-password", null);
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-    }
+    // Reset-password is an Admin-only AuthController action (POST /api/Auth/reset-password),
+    // not an app-users endpoint — see ResetPasswordTests.
 }

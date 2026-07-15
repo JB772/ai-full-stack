@@ -26,6 +26,24 @@ Read the row for the pattern you're about to build.
 - `date` ⇄ `p-datepicker` conversion using **local** components — never `toISOString()`.
 - Detail in `docs/relationships-and-nav.md`.
 
+### Sticky page toolbar (`course-form`, New + Edit)
+
+The viewport is the scroll container — **there is no fixed app header.** `.layout` is a flex row (sidebar
++ `.content`) with `min-height: 100vh`; the document itself scrolls. So a `.page-toolbar` can be pinned
+with plain `position: sticky; top: 0` (+ a `z-index` above the fields) — no scroll listener, no fixed
+positioning. It sticks to the viewport top within the content region without covering the sidebar (a
+separate flex column) or a header (there is none), and the toolbar's opaque `--p-content-background` keeps
+scrolling fields from showing through. `course-form` does this via a `sticky-toolbar` class on both New and
+Edit (one component serves both). Assert it in a headless Karma run with
+`getComputedStyle(el).position === 'sticky'`.
+
+### QR code (`course-detail`, 基本資料 block)
+
+QR codes use the framework-agnostic **`qrcode`** package, **not `angularx-qrcode`** — it has no Angular
+peer dep and returns a PNG data URL, which doubles as the `<img [src]>` and the download payload (build an
+anchor with `href=dataUrl`, `download={name}.png`, `.click()`). In tests, `qrcode.toDataURL` is overloaded
+— `spyOn(QRCode, 'toDataURL') as unknown as jasmine.Spy` to stub it.
+
 ### In-place (inline) cell editing on the list page
 
 The `course-list` table edits cells in place — the reference for adding inline editing to any list.
@@ -58,8 +76,9 @@ The `course-list` table edits cells in place — the reference for adding inline
 ## AppUser (`int` IDENTITY + natural key, same shape as AppRole)
 
 - A **server-managed, write-only column**: `PasswordHash` never appears in any DTO/model, is seeded
-  from `SysConfig` on create, and changes only through a dedicated **bodyless reset endpoint**.
-- Detail in `docs/pk-shapes.md`.
+  from `SysConfig` on create, and changes only through the auth endpoints (self-service change or the
+  Admin reset-to-default) — never via the AppUser CRUD DTOs.
+- Detail in `docs/pk-shapes.md`; the reset/change flows are in `docs/auth.md`.
 
 ## FeaturedPromoItem (`int` IDENTITY, plain) — the first custom (non-CRUD-triad) UI
 

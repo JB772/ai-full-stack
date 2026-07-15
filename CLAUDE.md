@@ -16,7 +16,7 @@ a table's shape before writing code against it.
 | `spec/feature-spec.template.md` | Template for new feature specs. |
 | `spec/{sub-system}/{Table}.md` | Generated feature specs (e.g. `spec/admin/PublishStatus.md`, `spec/course/Course.md`). |
 | `spec/ui-sample-*.png` | UI style reference only — not actual content. |
-| `docs/*.md` | Deep-dive references (PK shapes, delete guards, nav objects, schema/test traps, per-feature reference patterns, env traps). Read the relevant one before working in that area — see the pointer table under **Gotchas**. |
+| `docs/*.md` | Deep-dive references (auth, PK shapes, delete guards, nav objects, schema/test traps, per-feature reference patterns, env traps). Read the relevant one before working in that area — see the pointer table under **Gotchas**. |
 | `src/CMS.API` | .NET 9 Web API, Dapper, Swagger. Port 5000. |
 | `src/CMS.API.Tests` | xUnit. |
 | `src/CMS.NG` | Angular 20 standalone + PrimeNG 20. Port 4200. |
@@ -48,8 +48,8 @@ lock, headless Chrome, UTF-8 curl) → **`docs/environment.md`**.
 (`/api/app-roles`). `PUT` takes the pkid **from the body**, never a route param. Repositories take
 `IDbConnectionFactory` and open a connection per call — Dapper only, no EF.
 `DateOnly`/`TimeOnly` Dapper type handlers are registered in `Program.cs`. **All endpoints require a
-JWT bearer token** (global `FallbackPolicy`); only `AuthController` is `[AllowAnonymous]` — see the auth
-gotchas below.
+JWT bearer token** (global `FallbackPolicy`); only `AuthController.Login` is `[AllowAnonymous]` — see the
+auth gotchas below and `docs/auth.md`.
 
 **Frontend.** Per table: `features/{table-plural}/{table}-list|-detail|-form/` plus
 `{table}.model.ts` and `{table}.service.ts`. Standalone components, lazy-loaded in `app.routes.ts`.
@@ -82,110 +82,38 @@ directly, and the API's CORS policy allows any localhost origin.
   index (`Partner.AppKey` — freely editable, no 409), and a two-FK table may carry payload columns and so
   not be a junction (`PartnerCourseGroup`). The same table can appear in several `.sql` files — diff them,
   and grep *every* file when hunting for a table's children/FKs.
-- **Login / JWT auth is wired up (`POST /api/auth/login`).** `AuthController` + `AuthRepository`
-  (`IAuthRepository`) + `Security/JwtTokenService` (`System.IdentityModel.Tokens.Jwt`). The credential
-  check — `UserId` match **and** `IsActive = 1` **and** `PasswordHash = SHA256(password)` (uppercase hex
-  via `PasswordHasher`) — runs entirely in the SQL `WHERE` clause, so `PasswordHash` is never SELECTed.
-  Every failure (wrong password, unknown UserId, inactive, empty input) returns the *same* generic
-  `401 {"message":"invalid credentials"}` — don't leak which check failed. On success the JWT is
-  HMAC-SHA256-signed with `SysConfig['appConfig'].symmetricSecurityKey` **read at runtime** (never
-  hard-coded — same JSON-blob path `AppUserRepository` uses for `defaultPassword`), carries `userId` /
-  `userName` + one `role` claim per `AppUserRole.RoleId`, and expires 24h after issue. Response is
-  `{ userId, userName, accessToken }` — never `PasswordHash`. The route is `/api/auth/login`, **not** the
-  kebab-plural CRUD convention (auth is not a table, so there's no list/detail/form triad). Like the
-  default-password path, the **live SysConfig key lookup is not covered by `dotnet test`** — the
-  `InMemoryAuthRepository` fake (swapped into `CmsApiFactory`) supplies a known ≥32-char key; verify the
-  real Dapper path via Swagger against a DB whose `appConfig` row has `symmetricSecurityKey`.
-- **Self-service profile edit is `PUT /api/auth/profile` (authenticated) — identity comes from the JWT,
-  never the body.** The signed-in user may change **only their own `UserName`**. `AuthController.UpdateProfile`
-  reads `UserId` from `User.FindFirstValue(JwtTokenService.UserIdClaimType)` and passes it to
-  `IAuthRepository.UpdateUserNameAsync(userId, userName)` (Dapper `UPDATE AppUser SET UserName WHERE UserId`,
-  then reads the row + roles back). `UpdateProfileRequest` *has* a `UserId` field but it is **deliberately
-  ignored** (present only so tests can prove a body `UserId` can't retarget another account); `UserName` is
-  trimmed and required (empty/whitespace → **400**, not the login-style generic 401). Response is
-  `ProfileResponse { userId, userName, roles }` (roles are display-only, unchangeable here). Frontend:
-  `features/auth/profile/` (`Profile` component, route `/profile` under the token-guarded parent, "我的個人資料
-  My Profile" link in the shell's `sidebar-user` block). `AuthService.updateProfile(userName)` PUTs `{ userName }`
-  and, on success, writes the new name back into the `auth-profile` session blob **and** the `profileSignal`, so
-  `App`'s `userName()` refreshes live — roles/token in the session are left intact. Like login, the real Dapper
-  `UPDATE` isn't covered by `dotnet test` (the in-memory fake mutates its seed list); smoke-test via Swagger.
-- **Self-service password change is `POST /api/auth/change-password` (authenticated) — identity comes from
-  the JWT, never the body.** `AuthController.ChangePassword` (`[Authorize]`) reads `UserId` from
-  `User.FindFirstValue(JwtTokenService.UserIdClaimType)`; `ChangePasswordRequest` carries only the three
-  plaintext fields (`CurrentPassword` / `NewPassword` / `ConfirmNewPassword`) — no `UserId`. Order is fixed
-  and each failure is a **400 with a descriptive `message`** (not the login-style generic 401, since the
-  caller is already authenticated and the UI shows which check failed): **(1)** verify current password by
-  *reusing* `IAuthRepository.AuthenticateAsync(userId, SHA256(current))` (hash compared in the SQL `WHERE`,
-  never SELECTed) — wrong → 400, nothing changes; **(2)** complexity via `Security/PasswordPolicy.IsComplexEnough`
-  (length ≥ 8 **and** ≥ 3 of 4 classes: upper/lower/digit/symbol, where "symbol" = not letter-or-digit) →
-  400 with the exact bilingual `PasswordPolicy.ComplexityMessage`; **(3)** `NewPassword != ConfirmNewPassword`
-  → 400; **(4)** success → `IAuthRepository.UpdatePasswordAsync(userId, SHA256(new))`
-  (Dapper `UPDATE AppUser SET PasswordHash = @hash, PasswordUpdatedTime = SYSDATETIME() WHERE UserId` —
-  `SYSDATETIME()` to match the existing reset-password path in `AppUserRepository`) and
-  **204 No Content**. **No password hash ever crosses the wire in either direction** (success returns an empty
-  body). `PasswordPolicy` is a static shared source of truth: the Angular `passwordComplexityValidator` and
-  `COMPLEXITY_MESSAGE` in `features/auth/profile/profile.ts` mirror it verbatim. Frontend: a second `<form
-  data-testid="change-password-form">` on the same `Profile` page (below 帳號資料), a group-level
-  `passwordsMatchValidator`, and `AuthService.changePassword({ currentPassword, newPassword, confirmNewPassword })`
-  which **touches no session state** (the token stays valid). Like login/profile, the real Dapper `UPDATE`
-  isn't covered by `dotnet test`; the `InMemoryAuthRepository` fake stamps `PasswordUpdatedTime` and swaps the
-  hash, so `ChangePasswordTests` asserts state via the singleton fake (`_factory.Services.GetRequiredService`)
-  **and** end-to-end by re-logging-in with the new password — smoke-test the live path via Swagger.
-- **Authorization is global: every endpoint requires a valid Bearer token except `AuthController.Login`.**
-  `Program.cs` sets a `FallbackPolicy` (`RequireAuthenticatedUser`) + `AddJwtBearer`; `[AllowAnonymous]`
-  is **action-scoped on `Login` only** (not the whole controller — `AuthController` also hosts the
-  authenticated `PUT /api/auth/profile` and `POST /api/auth/change-password`, which carry `[Authorize]` and
-  fall under the global policy). The bearer signing key is resolved at runtime by
-  `JwtSigningKeyProvider` (a singleton that reads the same `symmetricSecurityKey` via `IAuthRepository`
-  and caches it) and fed to `TokenValidationParameters.IssuerSigningKeyResolver`; validation uses
-  `MapInboundClaims = false` + `RoleClaimType = "role"`, no issuer/audience. **Consequence for tests:**
-  a plain `_factory.CreateClient()` now gets **401** on any feature endpoint — new controller tests must
-  use **`_factory.CreateAuthenticatedClient()`** (or `CreateToken(...)`), the helpers on `CmsApiFactory`
-  that mint a real signed token. Only `AuthControllerTests` / the unauthenticated-path cases in
-  `AuthorizationTests` use a bare client on purpose.
-- **Frontend auth lives in `features/auth/` (no `core/`).** `AuthService` stores the profile
-  (`userId` / `userName` / `accessToken` / `roles`) in **session** storage under `auth-profile`; roles
-  are **decoded from the JWT `role` claim**, never fetched separately. `authInterceptor` attaches
-  `Authorization: Bearer <token>` and, on any **401**, clears the session and routes to `/login`.
-  `authGuard` (a `CanActivateChildFn` on a pathless parent route wrapping every feature route) redirects
-  to the public `/login` when there's no token. The `App` shell renders the sidebar only when
-  authenticated (login is full-screen), shows the signed-in `userName` + a logout control, and **hides
-  the `系統管理 Admin` nav group unless `roles` includes `Admin`** (via an `isAdmin` computed). When
-  seeding a signed-in session in a spec, write the `auth-profile` JSON to `sessionStorage` before
-  creating the component (see `app.spec.ts`).
+- **Auth is wired up and authorization is global.** All auth lives in `AuthController` (`/api/auth/*`) +
+  `IAuthRepository` + `Security/*`; `POST /api/auth/login` is the **only** `[AllowAnonymous]` action —
+  every other endpoint requires a valid Bearer token (`Program.cs` `FallbackPolicy`). `AuthController` also
+  hosts authenticated `PUT /api/auth/profile`, `POST /api/auth/change-password`, and **Admin-only**
+  (`[Authorize(Roles="Admin")]` → 403) `POST /api/auth/reset-password`. `PasswordHash` is never SELECTed or
+  returned, and the live `SysConfig['appConfig']` lookups (signing key, default password) aren't covered by
+  `dotnet test`. **Consequence for tests:** a bare `_factory.CreateClient()` 401s on any feature endpoint —
+  use `CmsApiFactory.CreateAuthenticatedClient()` / `CreateToken(...)` (a bare token defaults to the
+  `Admin` role; pass an explicit role like `"Editor"` to test a role restriction). Full per-endpoint flows,
+  JWT signing/validation, `PasswordPolicy`, and the frontend auth plumbing → **`docs/auth.md`**.
+- **Frontend auth lives in `features/auth/` (no `core/`).** `AuthService` keeps the profile in **session**
+  storage under `auth-profile` (roles decoded from the JWT `role` claim); `authInterceptor` adds the bearer
+  and clears→`/login` on 401; `authGuard` wraps every feature route on a pathless parent; the `App` shell
+  **hides the `系統管理 Admin` nav group unless `roles` includes `Admin`** (`isAdmin` computed). Seed a
+  signed-in session by writing `auth-profile` to `sessionStorage` **before** creating the component (see
+  `app.spec.ts`). Detail → **`docs/auth.md`**.
 - **PrimeNG major version tracks Angular's** (20 → 20); `primeng@latest` pulls v21 and fails peer resolution.
-- **QR codes use the framework-agnostic `qrcode` package, not `angularx-qrcode`** — it has no Angular
-  peer dep and returns a PNG data URL, which doubles as the `<img [src]>` and the download payload
-  (build an anchor with `href=dataUrl`, `download={name}.png`, `.click()`). See the QR block in
-  `course-detail` (title + image + download button in 基本資料). In tests, `qrcode.toDataURL` is
-  overloaded — `spyOn(QRCode, 'toDataURL') as unknown as jasmine.Spy` to stub it.
-- **The viewport is the scroll container — there is no fixed app header.** `.layout` is a flex row
-  (sidebar + `.content`) with `min-height: 100vh`; the document itself scrolls. So a `.page-toolbar`
-  can be pinned with plain `position: sticky; top: 0` (+ a `z-index` above the fields) — no scroll
-  listener, no fixed positioning. It sticks to the viewport top within the content region without
-  covering the sidebar (a separate flex column) or a header (there is none), and the toolbar's opaque
-  `--p-content-background` keeps scrolling fields from showing through. `course-form` does this via a
-  `sticky-toolbar` class on both New and Edit (one component serves both). Assert it in a headless
-  Karma run with `getComputedStyle(el).position === 'sticky'`.
-- **In-place list editing is hand-rolled, not `pEditableColumn`.** The `course-list` cell editor is a
-  component-managed edit-state (`editing` signal) driven by `(dblclick)`, because PrimeNG's
-  `pEditableColumn` opens on **single** click and the requirement was double-click only. Don't reach for
-  `pEditableColumn`/`p-cellEditor` here. See the Course row in `docs/reference-features.md`.
-- **Overlay editors (`p-select`, `p-datepicker`) must NOT commit on blur.** Their panels are
-  `appendTo="body"`, so a blur-to-save fires the instant you click an option / a date — tearing the editor
-  down before the pick lands, so the control looks like it "won't edit". The `p-select` commits on
-  `(onChange)` (+ `(onHide)` to close on click-away); the `p-datepicker` on `(onSelect)` + `(onClose)`.
-  Only plain text/number inputs are safe to commit on `(blur)`. See the Course row in
-  `docs/reference-features.md`.
+- **A few load-bearing frontend UI patterns live in `docs/reference-features.md` (Course), not here:** a
+  **sticky page toolbar** (`position: sticky` works because the viewport — not a fixed header — is the
+  scroll container), **QR codes** (framework-agnostic `qrcode` package, not `angularx-qrcode`), and
+  **in-place list-cell editing** (hand-rolled on `(dblclick)`, **not** `pEditableColumn`; overlay editors
+  like `p-select`/`p-datepicker` must **not** commit on blur). Read that file before reaching for any of them.
 
 ### Deep reference — read the relevant file before working in that area
 
 | Doc | Read it before… |
 |-----|-----------------|
+| `docs/auth.md` | touching login / JWT / authorization, self-service profile or password, or the Admin reset — per-endpoint flows, signing-key resolution, `PasswordPolicy`, the `CreateAuthenticatedClient` test seam, and the frontend auth plumbing |
 | `docs/pk-shapes.md` | adding a table — the four PK shapes (tinyint / smallint / plain-int / int+natural-key) and `AppUser`'s backend-only `PasswordHash` (SysConfig-seeded, reset-only) |
 | `docs/delete-guards.md` | writing any DELETE — 409-not-FK guards, multi-child messages, no-FK orphans, and load-bearing `ON DELETE CASCADE` checks |
 | `docs/relationships-and-nav.md` | touching FKs or N-N — `Course` multi-map nav objects, nullable-FK `LEFT JOIN`, `forkJoin` lookups, `date` ⇄ `p-datepicker`, why N-N editors are deferred |
-| `docs/reference-features.md` | adding a feature — the *secondary* pattern each built feature is the reference for (multi-child & cascading delete guards, multi-map nav, write-only column, custom scheduler UI, lookup-only FK targets) |
+| `docs/reference-features.md` | adding a feature — the *secondary* pattern each built feature is the reference for (multi-child & cascading delete guards, multi-map nav, write-only column, custom scheduler UI, lookup-only FK targets) and the reusable frontend UI patterns (sticky toolbar, QR codes, in-place cell editing / overlay-editor blur trap) |
 | `docs/schema-and-testing.md` | reading the schema or writing tests — invented-constraint traps, multi-file `.sql`, `p-table` in-place sort, don't-assert-Chinese-sort-order |
 | `docs/environment.md` | a Windows/PowerShell dev trap — Node PATH, `.ps1` execution policy, the `dotnet test` file lock, headless Chrome, UTF-8 curl |
 

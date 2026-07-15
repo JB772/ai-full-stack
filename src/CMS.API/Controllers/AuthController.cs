@@ -131,4 +131,29 @@ public class AuthController(IAuthRepository repository, IJwtTokenService tokenSe
 
         return NoContent();
     }
+
+    /// <summary>
+    /// 將指定使用者的密碼重設為系統預設值。此為 Admin 專屬的使用者管理動作 —— 授權以 JWT 中的 role 宣告
+    /// 判定，非 Admin 一律 403 (授權於後端強制，不僅靠前端隱藏按鈕)。目標帳號 UserId 取自請求本文
+    /// (重設的是「別人」的密碼，並非登入者本人，故不從 JWT 取)；預設密碼於後端由 SysConfig 讀取。
+    /// 明文密碼與雜湊永不經由此端點傳遞，成功僅回傳 204 (空內容)。
+    /// </summary>
+    [HttpPost("reset-password")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        var userId = request?.UserId?.Trim();
+        if (string.IsNullOrEmpty(userId))
+        {
+            return BadRequest(new { message = "UserId is required" });
+        }
+
+        var reset = await repository.ResetPasswordToDefaultAsync(userId);
+        return reset ? NoContent() : NotFound(new { message = "user not found" });
+    }
 }

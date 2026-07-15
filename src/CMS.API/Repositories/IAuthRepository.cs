@@ -25,4 +25,12 @@ public interface IAuthRepository
     /// 傳入的是「已雜湊」的新密碼；明文密碼永不進入資料層。回傳是否確實更新了一筆資料。
     /// </summary>
     Task<bool> UpdatePasswordAsync(string userId, string newPasswordHash);
+
+    /// <summary>
+    /// 將指定使用者的密碼重設為系統預設值 (SysConfig['appConfig'] JSON 內 defaultPassword 的 SHA256)，
+    /// 並將 PasswordUpdatedTime 設為現在時間。預設密碼於執行期由 SysConfig 讀取，不寫死於程式碼；
+    /// 明文密碼與雜湊永不離開後端。此為 Admin 專屬的使用者管理動作，userId 為目標帳號 (非登入者本人)。
+    /// 回傳是否確實更新了一筆資料 (查無此帳號回傳 false)。
+    /// </summary>
+    Task<bool> ResetPasswordToDefaultAsync(string userId);
 }

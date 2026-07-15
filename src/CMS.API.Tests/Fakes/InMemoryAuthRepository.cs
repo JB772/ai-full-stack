@@ -16,6 +16,13 @@ public class InMemoryAuthRepository : IAuthRepository
 {
     public const string SigningKey = "test-jwt-signing-key-0123456789-abcdefghijklmnop";
 
+    /// <summary>
+    /// Stands in for SysConfig['appConfig'].defaultPassword. The real Dapper repository reads this from
+    /// SysConfig (not covered by dotnet test); the fake exposes a known value so reset-password tests can
+    /// assert the stored hash equals SHA256(default).
+    /// </summary>
+    public const string DefaultPassword = "Cms@Default1";
+
     private sealed record Account(
         string UserId, string UserName, bool IsActive, string PasswordHash, string[] RoleIds,
         DateTime? PasswordUpdatedTime = null);
@@ -84,6 +91,23 @@ public class InMemoryAuthRepository : IAuthRepository
         _accounts[index] = _accounts[index] with
         {
             PasswordHash = newPasswordHash,
+            PasswordUpdatedTime = DateTime.UtcNow
+        };
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> ResetPasswordToDefaultAsync(string userId)
+    {
+        var index = _accounts.FindIndex(a => a.UserId == userId);
+        if (index < 0)
+        {
+            return Task.FromResult(false);
+        }
+
+        // Mirror the real UPDATE: hash the (known) default password, swap it in and stamp the update time.
+        _accounts[index] = _accounts[index] with
+        {
+            PasswordHash = PasswordHasher.Hash(DefaultPassword),
             PasswordUpdatedTime = DateTime.UtcNow
         };
         return Task.FromResult(true);

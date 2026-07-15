@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 import { environment } from '@env/environment';
-import { AuthProfile, ChangePasswordRequest, LoginRequest, ProfileResponse } from './auth.model';
+import { AuthProfile, ChangePasswordRequest, LoginRequest, ProfileResponse, ResetPasswordRequest } from './auth.model';
 
 /** Session-storage key holding the signed-in {@link AuthProfile}. */
 export const AUTH_STORAGE_KEY = 'auth-profile';
@@ -18,6 +18,7 @@ export class AuthService {
   private readonly loginUrl = `${environment.apiBaseUrl}/Auth/login`;
   private readonly profileUrl = `${environment.apiBaseUrl}/Auth/profile`;
   private readonly changePasswordUrl = `${environment.apiBaseUrl}/Auth/change-password`;
+  private readonly resetPasswordUrl = `${environment.apiBaseUrl}/Auth/reset-password`;
 
   private readonly profileSignal = signal<AuthProfile | null>(this.readProfile());
 
@@ -60,6 +61,17 @@ export class AuthService {
    */
   changePassword(request: ChangePasswordRequest): Observable<void> {
     return this.http.post<void>(this.changePasswordUrl, request);
+  }
+
+  /**
+   * Admin-only: resets another account's password to the system default. The client sends only the
+   * target `userId` — no password or hash crosses the API in either direction. The server enforces the
+   * Admin role (a non-Admin gets 403). Touches no session state — the admin's own token/profile are
+   * unaffected — so there is nothing to persist here.
+   */
+  resetPasswordToDefault(userId: string): Observable<void> {
+    const request: ResetPasswordRequest = { userId };
+    return this.http.post<void>(this.resetPasswordUrl, request);
   }
 
   /** Refreshes just the userName in the persisted profile + signal, leaving token and roles intact. */

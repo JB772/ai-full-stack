@@ -32,9 +32,4 @@ export class AppUserService {
   delete(pkid: number): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/${pkid}`);
   }
-
-  /** Reset the account's password to the system default. No body — the raw password never crosses the API. */
-  resetPassword(pkid: number): Observable<void> {
-    return this.http.post<void>(`${this.baseUrl}/${pkid}/reset-password`, {});
-  }
 }
