@@ -1,3 +1,13 @@
+/* Pin the action toolbar to the top of the page content region while the form body scrolls
+   underneath it. The document/viewport is the scroll container (no fixed app header), so
+   `sticky; top: 0` keeps Save/Cancel visible without covering the sidebar. z-index keeps it
+   above the scrolling fields. */
+.sticky-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
 /* Basic-data section lays out as two columns on wide screens; content section stays full width. */
 .form-grid {
   display: grid;
