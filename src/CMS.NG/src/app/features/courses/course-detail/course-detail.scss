@@ -58,3 +58,45 @@
     border-radius: 4px;
   }
 }
+
+/* 存成 PDF generates the archive via pdfmake — the rules below are only a courtesy for
+   anyone who reaches for raw Ctrl+P: they strip the app chrome and keep the page paginating
+   sanely. Print-only elements (the 是/否 text twin) are hidden on screen. */
+.print-only {
+  display: none;
+}
+
+@media print {
+  .print-only {
+    display: block;
+  }
+
+  /* Nothing to hide, nothing leaks: strip every screen-only affordance from the archive. */
+  .page-toolbar,
+  .qr-block,
+  app-row-audit-badge,
+  .usage-note {
+    display: none !important;
+  }
+
+  .card-title {
+    break-after: avoid;
+  }
+
+  .detail-grid {
+    dt {
+      break-after: avoid;
+    }
+
+    dd {
+      break-before: avoid;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  /* nvarchar(max) bodies (Outline, Objective, ...) must be allowed to break across pages —
+     `avoid` here would just dump trailing whitespace instead of paginating. */
+  .detail-text {
+    break-inside: auto;
+  }
+}

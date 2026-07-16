@@ -1,13 +1,25 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MessageService } from 'primeng/api';
 import { of, throwError } from 'rxjs';
 import QRCode from 'qrcode';
 import { CourseDetail } from './course-detail';
 import { CourseService } from '../course.service';
+import { CoursePdfService } from '../course-pdf.service';
 import { Course } from '../course.model';
 import { RowAuditService } from '../../row-audit/row-audit.service';
+import { AUTH_STORAGE_KEY } from '../../auth/auth.service';
+
+/** Seeds a signed-in session so AuthService (read on construction) exposes it to the page. */
+function signIn(userName = 'admin01'): void {
+  sessionStorage.setItem(
+    AUTH_STORAGE_KEY,
+    JSON.stringify({ userId: 'admin01', userName, accessToken: 'header.payload.sig', roles: ['Admin'] })
+  );
+}
 
 /** A 1x1 transparent PNG — stands in for a real QR render in tests. */
 const FAKE_QR_PNG =
@@ -55,12 +67,20 @@ function makeCourse(overrides: Partial<Course> = {}): Course {
 describe('CourseDetail', () => {
   let fixture: ComponentFixture<CourseDetail>;
   let service: jasmine.SpyObj<CourseService>;
+  let pdfService: jasmine.SpyObj<CoursePdfService>;
   let router: Router;
   let qrSpy: jasmine.Spy;
 
   async function setup(course: Course = makeCourse()) {
+    sessionStorage.clear();
+    signIn();
+
     service = jasmine.createSpyObj<CourseService>('CourseService', ['getByPkid']);
     service.getByPkid.and.returnValue(of(course));
+
+    // Stub the PDF generator — real pdfmake + an 11 MB font have no place in a unit test.
+    pdfService = jasmine.createSpyObj<CoursePdfService>('CoursePdfService', ['download']);
+    pdfService.download.and.resolveTo();
 
     // Stub the QR renderer so tests don't depend on the real canvas encoder.
     // `toDataURL` is overloaded, so spy on it as a plain jasmine.Spy.
@@ -72,8 +92,11 @@ describe('CourseDetail', () => {
       providers: [
         provideRouter([]),
         provideNoopAnimations(),
+        provideHttpClient(),
+        provideHttpClientTesting(),
         MessageService,
         { provide: CourseService, useValue: service },
+        { provide: CoursePdfService, useValue: pdfService },
         { provide: RowAuditService, useValue: { getForRecord: () => of([]) } },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map([['id', '1']]) } } }
       ]
@@ -110,6 +133,7 @@ describe('CourseDetail', () => {
     const actions = toolbar.querySelector('.page-actions') as HTMLElement;
     expect(actions.textContent).toContain('返回');
     expect(actions.textContent).toContain('編輯');
+    expect(actions.textContent).toContain('存成 PDF');
   });
 
   it('sums the child counts into a reference total', async () => {
@@ -153,6 +177,91 @@ describe('CourseDetail', () => {
     fixture.detectChanges();
 
     expect(navigate).toHaveBeenCalledWith(['/courses']);
+    expect(pdfService.download).not.toHaveBeenCalled();
+  });
+
+  describe('存成 PDF', () => {
+    it('is disabled until the course loads', async () => {
+      await setup();
+      service.getByPkid.and.returnValue(throwError(() => new Error('404')));
+      spyOn(router, 'navigate');
+      fixture.detectChanges();
+
+      const pdfButton: HTMLButtonElement =
+        fixture.nativeElement.querySelector('p-button[label="存成 PDF"] button');
+      expect(pdfButton.disabled).toBeTrue();
+    });
+
+    it('downloads the PDF with the course, generation time, and signed-in admin', async () => {
+      const course = makeCourse({ courseId: 'AZ-900', title: 'Azure 基礎' });
+      await setup(course);
+      fixture.detectChanges();
+
+      await api().savePdf();
+
+      expect(pdfService.download).toHaveBeenCalledWith(course, jasmine.any(Date), 'admin01');
+    });
+
+    it('downloads again on a second click (no reload needed)', async () => {
+      await setup();
+      fixture.detectChanges();
+
+      await api().savePdf();
+      await api().savePdf();
+
+      expect(pdfService.download).toHaveBeenCalledTimes(2);
+    });
+
+    it('toasts and recovers when PDF generation fails', async () => {
+      await setup();
+      fixture.detectChanges();
+      pdfService.download.and.rejectWith(new Error('font fetch failed'));
+      const messageService = TestBed.inject(MessageService);
+      const add = spyOn(messageService, 'add');
+
+      await api().savePdf();
+
+      expect(add).toHaveBeenCalledWith(jasmine.objectContaining({ severity: 'error', summary: 'PDF 產生失敗' }));
+      expect(api().savingPdf()).toBeFalse();
+    });
+  });
+
+  describe('completeness (screen view — the PDF twin lives in course-pdf.def.spec.ts)', () => {
+    it('renders every substantive field of the Course model', async () => {
+      const course = makeCourse({
+        officialTitle: 'Microsoft Azure Fundamentals',
+        material: '教材X',
+        objective: '目標X',
+        target: '對象X',
+        prerequisites: '先備X',
+        outline: '大綱X',
+        towardCertOrExam: '認證X',
+        note: '備註X',
+        otherInfo: '其他X'
+      });
+      await setup(course);
+      fixture.detectChanges();
+
+      const text: string = fixture.nativeElement.textContent;
+
+      // These keys are represented indirectly (nav-object labels, or 是/否 text), not by their
+      // own raw value — checked separately below instead of via the generic loop.
+      const representedIndirectly = new Set<keyof Course>([
+        'partnerPkid', 'courseGroupPkid', 'publishStatusPkid', 'canRepeat', 'partner', 'courseGroup', 'publishStatus'
+      ]);
+
+      for (const key of Object.keys(course) as (keyof Course)[]) {
+        if (representedIndirectly.has(key)) {
+          continue;
+        }
+        expect(text).withContext(`Course.${key} should appear in the print DOM`).toContain(String(course[key]));
+      }
+
+      expect(text).toContain(course.partner!.name);
+      expect(text).toContain(course.courseGroup!.description);
+      expect(text).toContain(course.publishStatus!.description);
+      expect(text).toContain('是');
+    });
   });
 
   describe('QR code', () => {

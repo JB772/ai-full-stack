@@ -161,3 +161,30 @@
   min-width: 0;
   padding: 1rem 1.25rem;
 }
+
+/* Required for ANY print variant: app.html wraps every guarded route in the sidebar shell,
+   so a chrome-free print output always needs these global rules regardless of which page
+   triggers window.print(). */
+@media print {
+  .sidebar,
+  p-toast,
+  p-confirmdialog {
+    display: none;
+  }
+
+  .layout {
+    display: block;
+  }
+
+  .content {
+    padding: 0;
+  }
+
+  body {
+    font-size: 10.5pt;
+  }
+
+  @page {
+    margin: 1.5cm;
+  }
+}
