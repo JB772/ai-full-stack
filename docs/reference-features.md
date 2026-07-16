@@ -78,6 +78,10 @@ The `course-list` table edits cells in place — the reference for adding inline
 - A **server-managed, write-only column**: `PasswordHash` never appears in any DTO/model, is seeded
   from `SysConfig` on create, and changes only through the auth endpoints (self-service change or the
   Admin reset-to-default) — never via the AppUser CRUD DTOs.
+- The **N-N membership editor** (`AppUserRole`): Admin-only, per-row `GET`/`POST`/`DELETE
+  `/api/app-users/{id}/roles` (audited, `403` for non-Admins) with a role picker on the AppUser **edit**
+  form, edit-mode only. It is the reference for assigning/removing junction-table membership — see
+  `docs/relationships-and-nav.md`.
 - Detail in `docs/pk-shapes.md`; the reset/change flows are in `docs/auth.md`.
 
 ## FeaturedPromoItem (`int` IDENTITY, plain) — the first custom (non-CRUD-triad) UI

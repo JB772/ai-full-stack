@@ -24,10 +24,27 @@ and returns nested nav objects (`course.partner.name`, etc.). Points that bite:
   `features/courses/date.util.ts` (`toIsoDate` / `fromIsoDate`, **local** components — never
   `toISOString()`, which shifts to UTC and lands the wrong day for UTC+8).
 
-## N-N editing is deferred everywhere — but count the junctions in the delete guard
+## N-N membership editing — the `AppUserRole` reference (and count the junctions in the delete guard)
 
-No feature builds an N-N membership editor yet. See `delete-guards.md` for `Course`'s cascade junctions
-and `AppUser`'s `AppUserRole`.
+`AppUser`'s role editor is the reference N-N membership editor. It manages the `AppUserRole` junction
+(User ⇄ Role) through Admin-only, per-row endpoints on the AppUsers controller rather than a bulk
+replace-all:
+
+- `GET /api/app-users/{id}/roles` → the user's roles (joined to `AppRole` for names).
+- `POST /api/app-users/{id}/roles` `{ roleId }` → assign — `[Authorize(Roles = "Admin")]`; `409` if already
+  assigned, `404` if the user or role is missing, `400` on empty `roleId`.
+- `DELETE /api/app-users/{id}/roles/{roleId}` → unassign — Admin-only; `204` / `404`.
+
+Each write runs in a transaction and is audited via `RowAuditWriter` (`ActionDesc` = the row's first string
+column, i.e. `UserId`; `UserName` from the JWT). The picker lives on the AppUser **edit** form (not the
+read-only detail view), and only in **edit mode** — membership is keyed by the natural `UserId`, so the
+account must already exist (create mode shows no picker). Assign/remove are immediate API writes,
+independent of the form's Save.
+
+Prefer this per-row shape over a `p-multiselect` replace-all when each membership is an independent action
+you want individually audited. **Watch for payload columns** (next section) — a junction that carries data
+is a child entity with its own CRUD, not a membership picker. See `delete-guards.md` for `Course`'s cascade
+junctions and how `AppUserRole` counts into `AppUser`'s delete guard.
 
 ## Two FK columns don't make a junction table
 

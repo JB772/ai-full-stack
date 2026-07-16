@@ -139,7 +139,7 @@ Compressed to the rule + where the detail lives. Read the linked doc before work
 | `docs/exception-handling.md` | touching error handling — the global 500 middleware (registration order, no-leak guarantee, test-only controller) and the `authInterceptor` 5xx/401 behavior + `MessageService` spec requirement |
 | `docs/pk-shapes.md` | adding a table — the four PK shapes (tinyint / smallint / plain-int / int+natural-key) and `AppUser`'s backend-only `PasswordHash` (SysConfig-seeded, reset-only) |
 | `docs/delete-guards.md` | writing any DELETE — 409-not-FK guards, multi-child messages, no-FK orphans, load-bearing `ON DELETE CASCADE` checks |
-| `docs/relationships-and-nav.md` | touching FKs or N-N — `Course` multi-map nav objects, nullable-FK `LEFT JOIN`, `forkJoin` lookups, `date` ⇄ `p-datepicker`, why N-N editors are deferred |
+| `docs/relationships-and-nav.md` | touching FKs or N-N — `Course` multi-map nav objects, nullable-FK `LEFT JOIN`, `forkJoin` lookups, `date` ⇄ `p-datepicker`, and the `AppUserRole` membership editor (the reference for N-N assign/remove) |
 | `docs/reference-features.md` | adding a feature — the *secondary* pattern each built feature demonstrates (multi-child & cascading delete guards, multi-map nav, write-only column, custom scheduler UI, lookup-only FK targets) |
 | `docs/ui-patterns.md` | building a frontend page — sticky action toolbar, QR download, inline list-cell editing, overlay-editor (`p-select`/`p-datepicker`) blur trap |
 | `docs/schema-and-testing.md` | reading the schema or writing tests — invented-constraint traps, multi-file `.sql`, `p-table` in-place sort, don't-assert-Chinese-sort-order |
@@ -159,6 +159,14 @@ its row in `docs/reference-features.md` for the secondary patterns it demonstrat
 | `Partner` | `smallint` IDENTITY | the DB generates the key (the common case) |
 | `Course` | `int` IDENTITY (plain) | the table has **outbound FKs** (nav objects via multi-map), or you want **in-place cell editing** on a list page |
 | `FeaturedPromoItem` | `int` IDENTITY (plain) | the UI is **not** the list/detail/form triad, or you need a multi-column UNIQUE 409 / a positional swap |
+| `AppUser` role editor | N-N junction (`AppUserRole`) | you need to **assign/remove membership** in a junction table |
+
+**N-N membership editing** (add/remove a row in a junction table) is done by `AppUser`'s role editor:
+Admin-only `GET`/`POST`/`DELETE /api/app-users/{id}/roles` (each write audited via `RowAuditWriter`;
+`403` for non-Admins) plus a role picker on the AppUser **edit** form — **edit-mode only**, since membership
+is keyed by the natural key and needs an existing row (create mode shows no picker, like the RowAudit badge).
+Assign/remove are immediate API writes, independent of the form's Save. Copy it for any junction table;
+detail → `docs/relationships-and-nav.md`.
 
 1. Read the table in `database/*.sql`; write a spec from `spec/feature-spec.template.md` to
    `spec/{sub-system}/{Table}.md`. Confirm whether `pkid` is really an IDENTITY.
