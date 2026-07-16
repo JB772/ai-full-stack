@@ -1,11 +1,15 @@
+using System.Data;
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Models;
 using Dapper;
 
 namespace CMS.API.Repositories;
 
-public class FeaturedPromoItemRepository(IDbConnectionFactory connectionFactory) : IFeaturedPromoItemRepository
+public class FeaturedPromoItemRepository(IDbConnectionFactory connectionFactory, RowAuditWriter auditWriter) : IFeaturedPromoItemRepository
 {
+    private const string TableName = "FeaturedPromoItem";
+
     // Two outbound FKs (TrainingCenter, Promotion2), both NOT NULL → two INNER JOINs and two nav objects.
     // All FeaturedPromoItem columns come first, then TrainingCenter (pkid, Name), then Promotion2
     // (pkid, PromoCode). splitOn = "pkid,pkid" marks the start of each nav object.
@@ -121,7 +125,15 @@ public class FeaturedPromoItemRepository(IDbConnectionFactory connectionFactory)
             """;
 
         using var conn = connectionFactory.CreateConnection();
-        return await conn.ExecuteScalarAsync<int>(sql, request);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var pkid = await conn.ExecuteScalarAsync<int>(sql, request, tx);
+        var created = await LoadByPkidAsync(conn, pkid, tx);
+        await auditWriter.LogInsertAsync(TableName, created!, conn, tx);
+
+        tx.Commit();
+        return pkid;
     }
 
     public async Task<bool> UpdateAsync(FeaturedPromoItemRequest request)
@@ -138,14 +150,49 @@ public class FeaturedPromoItemRepository(IDbConnectionFactory connectionFactory)
             """;
 
         using var conn = connectionFactory.CreateConnection();
-        return await conn.ExecuteAsync(sql, request) > 0;
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var before = await LoadByPkidAsync(conn, request.Pkid, tx);
+        if (before is null)
+        {
+            return false;
+        }
+
+        await conn.ExecuteAsync(sql, request, tx);
+        var after = await LoadByPkidAsync(conn, request.Pkid, tx);
+        await auditWriter.LogUpdateAsync(TableName, before, after!, conn, tx);
+
+        tx.Commit();
+        return true;
     }
 
     /// <summary>Nothing FKs to FeaturedPromoItem, so the delete is unguarded — no child rows to protect.</summary>
     public async Task<bool> DeleteAsync(int pkid)
     {
         using var conn = connectionFactory.CreateConnection();
-        return await conn.ExecuteAsync("DELETE FROM FeaturedPromoItem WHERE pkid = @Pkid", new { Pkid = pkid }) > 0;
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var row = await LoadByPkidAsync(conn, pkid, tx);
+        if (row is null)
+        {
+            return false;
+        }
+
+        await conn.ExecuteAsync("DELETE FROM FeaturedPromoItem WHERE pkid = @Pkid", new { Pkid = pkid }, tx);
+        await auditWriter.LogDeleteAsync(TableName, row, conn, tx);
+
+        tx.Commit();
+        return true;
+    }
+
+    /// <summary>Loads a row (with nav objects) on an existing open connection/transaction (see PublishStatusRepository).</summary>
+    private static async Task<FeaturedPromoItem?> LoadByPkidAsync(IDbConnection conn, int pkid, IDbTransaction tx)
+    {
+        var rows = await conn.QueryAsync<FeaturedPromoItem, FeaturedPromoNavTrainingCenter, FeaturedPromoNavPromotion, FeaturedPromoItem>(
+            $"{SelectColumns} WHERE f.pkid = @Pkid", Map, new { Pkid = pkid }, tx, splitOn: SplitOn);
+        return rows.SingleOrDefault();
     }
 
     public async Task<MoveResult> MoveAsync(int pkid, bool down)

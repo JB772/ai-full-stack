@@ -6,10 +6,11 @@ import { InputTextModule } from 'primeng/inputtext';
 import { MessageService } from 'primeng/api';
 import { CourseGroupRequest } from '../course-group.model';
 import { CourseGroupService } from '../course-group.service';
+import { RowAuditBadgeComponent } from '../../row-audit/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-course-group-form',
-  imports: [ReactiveFormsModule, ButtonModule, InputTextModule],
+  imports: [ReactiveFormsModule, ButtonModule, InputTextModule, RowAuditBadgeComponent],
   templateUrl: './course-group-form.html',
   styleUrl: './course-group-form.scss'
 })

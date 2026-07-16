@@ -4,10 +4,11 @@ import { ButtonModule } from 'primeng/button';
 import { MessageService } from 'primeng/api';
 import { Partner } from '../partner.model';
 import { PartnerService } from '../partner.service';
+import { RowAuditBadgeComponent } from '../../row-audit/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-partner-detail',
-  imports: [RouterLink, ButtonModule],
+  imports: [RouterLink, ButtonModule, RowAuditBadgeComponent],
   templateUrl: './partner-detail.html',
   styleUrl: './partner-detail.scss'
 })

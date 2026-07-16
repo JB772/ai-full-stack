@@ -16,6 +16,7 @@ import { fromIsoDate, toIsoDate } from '../date.util';
 import { PartnerService } from '../../partners/partner.service';
 import { CourseGroupService } from '../../course-groups/course-group.service';
 import { PublishStatusService } from '../../publish-statuses/publish-status.service';
+import { RowAuditBadgeComponent } from '../../row-audit/row-audit-badge/row-audit-badge';
 
 type ControlName =
   | 'title'
@@ -57,7 +58,8 @@ interface Option {
     TextareaModule,
     DatePickerModule,
     SelectModule,
-    CheckboxModule
+    CheckboxModule,
+    RowAuditBadgeComponent
   ],
   templateUrl: './course-form.html',
   styleUrl: './course-form.scss'

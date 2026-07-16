@@ -7,6 +7,7 @@ import QRCode from 'qrcode';
 import { CourseDetail } from './course-detail';
 import { CourseService } from '../course.service';
 import { Course } from '../course.model';
+import { RowAuditService } from '../../row-audit/row-audit.service';
 
 /** A 1x1 transparent PNG — stands in for a real QR render in tests. */
 const FAKE_QR_PNG =
@@ -73,6 +74,7 @@ describe('CourseDetail', () => {
         provideNoopAnimations(),
         MessageService,
         { provide: CourseService, useValue: service },
+        { provide: RowAuditService, useValue: { getForRecord: () => of([]) } },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map([['id', '1']]) } } }
       ]
     }).compileComponents();

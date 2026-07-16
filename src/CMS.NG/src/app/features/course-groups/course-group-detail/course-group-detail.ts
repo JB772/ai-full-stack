@@ -4,10 +4,11 @@ import { ButtonModule } from 'primeng/button';
 import { MessageService } from 'primeng/api';
 import { CourseGroup } from '../course-group.model';
 import { CourseGroupService } from '../course-group.service';
+import { RowAuditBadgeComponent } from '../../row-audit/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-course-group-detail',
-  imports: [RouterLink, ButtonModule],
+  imports: [RouterLink, ButtonModule, RowAuditBadgeComponent],
   templateUrl: './course-group-detail.html',
   styleUrl: './course-group-detail.scss'
 })

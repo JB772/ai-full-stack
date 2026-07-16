@@ -21,3 +21,4 @@ coverage/
 # OS
 Thumbs.db
 .DS_Store
+.gstack/

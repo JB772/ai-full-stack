@@ -6,6 +6,7 @@ import { of, throwError } from 'rxjs';
 import { CourseGroupDetail } from './course-group-detail';
 import { CourseGroupService } from '../course-group.service';
 import { CourseGroup } from '../course-group.model';
+import { RowAuditService } from '../../row-audit/row-audit.service';
 
 describe('CourseGroupDetail', () => {
   let fixture: ComponentFixture<CourseGroupDetail>;
@@ -30,6 +31,7 @@ describe('CourseGroupDetail', () => {
         provideNoopAnimations(),
         MessageService,
         { provide: CourseGroupService, useValue: service },
+        { provide: RowAuditService, useValue: { getForRecord: () => of([]) } },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map([['id', '2']]) } } }
       ]
     }).compileComponents();

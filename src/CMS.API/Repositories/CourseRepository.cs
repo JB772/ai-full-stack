@@ -1,11 +1,15 @@
+using System.Data;
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Models;
 using Dapper;
 
 namespace CMS.API.Repositories;
 
-public class CourseRepository(IDbConnectionFactory connectionFactory) : ICourseRepository
+public class CourseRepository(IDbConnectionFactory connectionFactory, RowAuditWriter auditWriter) : ICourseRepository
 {
+    private const string TableName = "Course";
+
     // Course is the first table in this repo with outbound FKs, so it is the first to multi-map nav
     // objects. Partner and PublishStatus are inner joins (NOT NULL FKs); CourseGroup is LEFT JOIN
     // because CourseGroup_pkid is nullable — Dapper yields a null nav object when the id is null.
@@ -156,7 +160,15 @@ public class CourseRepository(IDbConnectionFactory connectionFactory) : ICourseR
             """;
 
         using var conn = connectionFactory.CreateConnection();
-        return await conn.ExecuteScalarAsync<int>(sql, request);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var pkid = await conn.ExecuteScalarAsync<int>(sql, request, tx);
+        var created = await LoadByPkidAsync(conn, pkid, tx);
+        await auditWriter.LogInsertAsync(TableName, created!, conn, tx);
+
+        tx.Commit();
+        return pkid;
     }
 
     /// <summary>Every non-key column is writable; pkid identifies the row and is never re-written.</summary>
@@ -191,7 +203,21 @@ public class CourseRepository(IDbConnectionFactory connectionFactory) : ICourseR
             """;
 
         using var conn = connectionFactory.CreateConnection();
-        return await conn.ExecuteAsync(sql, request) > 0;
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var before = await LoadByPkidAsync(conn, request.Pkid, tx);
+        if (before is null)
+        {
+            return false;
+        }
+
+        await conn.ExecuteAsync(sql, request, tx);
+        var after = await LoadByPkidAsync(conn, request.Pkid, tx);
+        await auditWriter.LogUpdateAsync(TableName, before, after!, conn, tx);
+
+        tx.Commit();
+        return true;
     }
 
     /// <summary>
@@ -202,6 +228,28 @@ public class CourseRepository(IDbConnectionFactory connectionFactory) : ICourseR
     public async Task<bool> DeleteAsync(int pkid)
     {
         using var conn = connectionFactory.CreateConnection();
-        return await conn.ExecuteAsync("DELETE FROM Course WHERE pkid = @Pkid", new { Pkid = pkid }) > 0;
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var row = await LoadByPkidAsync(conn, pkid, tx);
+        if (row is null)
+        {
+            return false;
+        }
+
+        await conn.ExecuteAsync("DELETE FROM Course WHERE pkid = @Pkid", new { Pkid = pkid }, tx);
+        await auditWriter.LogDeleteAsync(TableName, row, conn, tx);
+
+        tx.Commit();
+        return true;
+    }
+
+    /// <summary>Loads a row (with nav objects) on an existing open connection/transaction. The audit's
+    /// changed-column comparison ignores nav objects, so reloading before/after is safe (see PublishStatusRepository).</summary>
+    private static async Task<Course?> LoadByPkidAsync(IDbConnection conn, int pkid, IDbTransaction tx)
+    {
+        var rows = await conn.QueryAsync<Course, CourseNavPartner, CourseNavCourseGroup, CourseNavPublishStatus, Course>(
+            $"{SelectColumns} WHERE c.pkid = @Pkid", Map, new { Pkid = pkid }, tx, splitOn: SplitOn);
+        return rows.SingleOrDefault();
     }
 }

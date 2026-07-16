@@ -1,11 +1,15 @@
+using System.Data;
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Models;
 using Dapper;
 
 namespace CMS.API.Repositories;
 
-public class CourseGroupRepository(IDbConnectionFactory connectionFactory) : ICourseGroupRepository
+public class CourseGroupRepository(IDbConnectionFactory connectionFactory, RowAuditWriter auditWriter) : ICourseGroupRepository
 {
+    private const string TableName = "CourseGroup";
+
     // CourseGroup has no FK columns, so there is nothing to multi-map. The two counts are the delete
     // guard: the controller reads them off the entity it already loaded for its 404. CourseCount matters
     // more than the usual count column — FK_Course_CourseGroup cascades, so nothing else stops the delete.
@@ -63,7 +67,15 @@ public class CourseGroupRepository(IDbConnectionFactory connectionFactory) : ICo
             """;
 
         using var conn = connectionFactory.CreateConnection();
-        return await conn.ExecuteScalarAsync<short>(sql, request);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var pkid = await conn.ExecuteScalarAsync<short>(sql, request, tx);
+        var created = await LoadByPkidAsync(conn, pkid, tx);
+        await auditWriter.LogInsertAsync(TableName, created!, conn, tx);
+
+        tx.Commit();
+        return pkid;
     }
 
     /// <summary>Description is the only writable column — children reference pkid, so nothing is immutable.</summary>
@@ -76,7 +88,21 @@ public class CourseGroupRepository(IDbConnectionFactory connectionFactory) : ICo
             """;
 
         using var conn = connectionFactory.CreateConnection();
-        return await conn.ExecuteAsync(sql, request) > 0;
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var before = await LoadByPkidAsync(conn, request.Pkid, tx);
+        if (before is null)
+        {
+            return false;
+        }
+
+        await conn.ExecuteAsync(sql, request, tx);
+        var after = await LoadByPkidAsync(conn, request.Pkid, tx);
+        await auditWriter.LogUpdateAsync(TableName, before, after!, conn, tx);
+
+        tx.Commit();
+        return true;
     }
 
     /// <summary>
@@ -87,6 +113,24 @@ public class CourseGroupRepository(IDbConnectionFactory connectionFactory) : ICo
     public async Task<bool> DeleteAsync(short pkid)
     {
         using var conn = connectionFactory.CreateConnection();
-        return await conn.ExecuteAsync("DELETE FROM CourseGroup WHERE pkid = @Pkid", new { Pkid = pkid }) > 0;
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var row = await LoadByPkidAsync(conn, pkid, tx);
+        if (row is null)
+        {
+            return false;
+        }
+
+        await conn.ExecuteAsync("DELETE FROM CourseGroup WHERE pkid = @Pkid", new { Pkid = pkid }, tx);
+        await auditWriter.LogDeleteAsync(TableName, row, conn, tx);
+
+        tx.Commit();
+        return true;
     }
+
+    /// <summary>Loads a row on an existing open connection/transaction (see PublishStatusRepository).</summary>
+    private static async Task<CourseGroup?> LoadByPkidAsync(IDbConnection conn, short pkid, IDbTransaction tx)
+        => await conn.QuerySingleOrDefaultAsync<CourseGroup>(
+            $"{SelectColumns} WHERE cg.pkid = @Pkid", new { Pkid = pkid }, tx);
 }

@@ -21,3 +21,9 @@ export interface AppUserQuery {
   keyword?: string | null;
   isActive?: boolean | null;
 }
+
+/** 使用者的單一角色 (含角色名稱) — matches the API `/app-users/{id}/roles` response item. */
+export interface UserRole {
+  roleId: string;
+  roleName: string;
+}

@@ -7,6 +7,7 @@
   </div>
 
   <div class="page-actions">
+    <app-row-audit-badge [tableName]="'AppRole'" [pkid]="role()?.pkid ?? 0" />
     <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" routerLink="/app-roles" />
     <p-button label="編輯" icon="pi pi-pencil" (onClick)="edit()" [disabled]="!role()" />
   </div>

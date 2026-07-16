@@ -7,6 +7,7 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { MessageService } from 'primeng/api';
 import { PartnerRequest } from '../partner.model';
 import { PartnerService } from '../partner.service';
+import { RowAuditBadgeComponent } from '../../row-audit/row-audit-badge/row-audit-badge';
 
 type ControlName =
   | 'name'
@@ -18,7 +19,7 @@ type ControlName =
 
 @Component({
   selector: 'app-partner-form',
-  imports: [ReactiveFormsModule, ButtonModule, InputTextModule, InputNumberModule],
+  imports: [ReactiveFormsModule, ButtonModule, InputTextModule, InputNumberModule, RowAuditBadgeComponent],
   templateUrl: './partner-form.html',
   styleUrl: './partner-form.scss'
 })

@@ -6,6 +6,7 @@ import { of, throwError } from 'rxjs';
 import { PublishStatusForm } from './publish-status-form';
 import { PublishStatusService } from '../publish-status.service';
 import { PublishStatus } from '../publish-status.model';
+import { RowAuditService } from '../../row-audit/row-audit.service';
 
 describe('PublishStatusForm', () => {
   let fixture: ComponentFixture<PublishStatusForm>;
@@ -36,6 +37,7 @@ describe('PublishStatusForm', () => {
         provideNoopAnimations(),
         MessageService,
         { provide: PublishStatusService, useValue: service },
+        { provide: RowAuditService, useValue: { getForRecord: () => of([]) } },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map(id ? [['id', id]] : []) } } }
       ]
     }).compileComponents();

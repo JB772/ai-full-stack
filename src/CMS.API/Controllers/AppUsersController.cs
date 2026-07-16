@@ -1,5 +1,6 @@
 using CMS.API.Models;
 using CMS.API.Repositories;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CMS.API.Controllers;
@@ -91,5 +92,73 @@ public class AppUsersController(IAppUserRepository repository) : ControllerBase
 
         await repository.DeleteAsync(id);
         return NoContent();
+    }
+
+    /// <summary>取得使用者目前的角色清單 (含角色名稱)。</summary>
+    [HttpGet("{id:int}/roles")]
+    [ProducesResponseType(typeof(IEnumerable<UserRole>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IEnumerable<UserRole>>> GetRoles(int id)
+    {
+        var user = await repository.GetByPkidAsync(id);
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        return Ok(await repository.GetRolesAsync(id));
+    }
+
+    /// <summary>指派角色給使用者 (僅限 Admin)。回傳更新後的角色清單。</summary>
+    [HttpPost("{id:int}/roles")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(IEnumerable<UserRole>), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<IEnumerable<UserRole>>> AssignRole(int id, [FromBody] AssignRoleRequest request)
+    {
+        var roleId = request?.RoleId?.Trim();
+        if (string.IsNullOrEmpty(roleId))
+        {
+            return BadRequest(new { message = "角色代碼為必填。" });
+        }
+
+        var user = await repository.GetByPkidAsync(id);
+        if (user is null)
+        {
+            return NotFound(new { message = "找不到該使用者。" });
+        }
+
+        if (!await repository.RoleExistsAsync(roleId))
+        {
+            return NotFound(new { message = $"找不到角色「{roleId}」。" });
+        }
+
+        if (await repository.HasRoleAsync(id, roleId))
+        {
+            return Conflict(new { message = $"使用者「{user.UserId}」已擁有角色「{roleId}」。" });
+        }
+
+        await repository.AssignRoleAsync(id, roleId);
+        var roles = await repository.GetRolesAsync(id);
+        return CreatedAtAction(nameof(GetRoles), new { id }, roles);
+    }
+
+    /// <summary>移除使用者的角色 (僅限 Admin)。</summary>
+    [HttpDelete("{id:int}/roles/{roleId}")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RemoveRole(int id, string roleId)
+    {
+        var user = await repository.GetByPkidAsync(id);
+        if (user is null)
+        {
+            return NotFound(new { message = "找不到該使用者。" });
+        }
+
+        var removed = await repository.RemoveRoleAsync(id, roleId);
+        return removed ? NoContent() : NotFound(new { message = $"使用者「{user.UserId}」未擁有角色「{roleId}」。" });
     }
 }

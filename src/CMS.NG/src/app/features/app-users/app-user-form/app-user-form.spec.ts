@@ -8,6 +8,7 @@ import { AppUserForm } from './app-user-form';
 import { AppUserService } from '../app-user.service';
 import { AuthService } from '../../auth/auth.service';
 import { AppUser } from '../app-user.model';
+import { RowAuditService } from '../../row-audit/row-audit.service';
 
 describe('AppUserForm', () => {
   let fixture: ComponentFixture<AppUserForm>;
@@ -44,6 +45,7 @@ describe('AppUserForm', () => {
         ConfirmationService,
         { provide: AppUserService, useValue: service },
         { provide: AuthService, useValue: auth },
+        { provide: RowAuditService, useValue: { getForRecord: () => of([]) } },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map(id ? [['id', id]] : []) } } }
       ]
     }).compileComponents();

@@ -18,6 +18,10 @@ public class CmsApiFactory : WebApplicationFactory<Program>
 
         builder.ConfigureServices(services =>
         {
+            // Make this test assembly's controllers (e.g. TestErrorsController) discoverable so the
+            // global exception-handling middleware can be exercised against an endpoint that throws.
+            services.AddControllers().AddApplicationPart(typeof(CmsApiFactory).Assembly);
+
             services.RemoveAll<IAuthRepository>();
             services.AddSingleton<IAuthRepository, InMemoryAuthRepository>();
 
@@ -47,6 +51,9 @@ public class CmsApiFactory : WebApplicationFactory<Program>
 
             services.RemoveAll<IPromotionRepository>();
             services.AddSingleton<IPromotionRepository, InMemoryPromotionRepository>();
+
+            services.RemoveAll<IRowAuditRepository>();
+            services.AddSingleton<IRowAuditRepository, InMemoryRowAuditRepository>();
         });
     }
 
