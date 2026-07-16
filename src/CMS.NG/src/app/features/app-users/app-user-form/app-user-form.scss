@@ -19,3 +19,32 @@
 :host ::ng-deep .w-full input {
   width: 100%;
 }
+
+.roles-current {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.roles-empty {
+  color: var(--p-text-muted-color);
+}
+
+.roles-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+
+  .roles-add-select {
+    min-width: 18rem;
+  }
+}

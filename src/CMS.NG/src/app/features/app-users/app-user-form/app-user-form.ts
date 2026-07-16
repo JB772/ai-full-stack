@@ -1,24 +1,31 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { CheckboxModule } from 'primeng/checkbox';
+import { TagModule } from 'primeng/tag';
+import { SelectModule } from 'primeng/select';
 import { ConfirmationService, MessageService } from 'primeng/api';
-import { AppUserRequest } from '../app-user.model';
+import { AppUserRequest, UserRole } from '../app-user.model';
 import { AppUserService } from '../app-user.service';
+import { AppRoleService } from '../../app-roles/app-role.service';
 import { AuthService } from '../../auth/auth.service';
 import { RowAuditBadgeComponent } from '../../row-audit/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-app-user-form',
-  imports: [ReactiveFormsModule, ButtonModule, InputTextModule, CheckboxModule, RowAuditBadgeComponent],
+  imports: [
+    ReactiveFormsModule, FormsModule, ButtonModule, InputTextModule,
+    CheckboxModule, TagModule, SelectModule, RowAuditBadgeComponent
+  ],
   templateUrl: './app-user-form.html',
   styleUrl: './app-user-form.scss'
 })
 export class AppUserForm implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly service = inject(AppUserService);
+  private readonly roleService = inject(AppRoleService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly messageService = inject(MessageService);
@@ -33,6 +40,22 @@ export class AppUserForm implements OnInit {
   // Reset-Password-to-Default is an Admin-only action; the button is hidden for non-Admins (and the
   // backend enforces the Admin role regardless — hiding the button is not the security control).
   protected readonly isAdmin = this.authService.isAdmin;
+
+  // Role management (AppUserRole N-N editor) — Admin-only, and only in edit mode: roles are keyed by
+  // UserId, so the account must already exist. Assign/remove are immediate API writes, independent of
+  // the form's Save.
+  protected readonly roles = signal<UserRole[]>([]);
+  protected readonly allRoleIds = signal<{ roleId: string; roleName: string }[]>([]);
+  protected readonly selectedRoleId = signal<string | null>(null);
+  protected readonly savingRole = signal(false);
+
+  /** Roles the user does not yet have — the assignable options for the add-role picker. */
+  protected readonly assignableRoles = computed(() => {
+    const assigned = new Set(this.roles().map(r => r.roleId));
+    return this.allRoleIds()
+      .filter(r => !assigned.has(r.roleId))
+      .map(r => ({ label: `${r.roleName} (${r.roleId})`, value: r.roleId }));
+  });
 
   /** Shown in the edit-mode toolbar (row-audit badge), so the template needs access. */
   protected pkid = 0;
@@ -65,11 +88,77 @@ export class AppUserForm implements OnInit {
           isActive: user.isActive
         });
         this.loading.set(false);
+        if (this.isAdmin()) {
+          this.loadRoles();
+          this.loadAllRoles();
+        }
       },
       error: () => {
         this.loading.set(false);
         this.messageService.add({ severity: 'error', summary: '載入失敗', detail: '找不到該使用者。' });
         this.router.navigate(['/app-users']);
+      }
+    });
+  }
+
+  private loadRoles(): void {
+    this.service.getRoles(this.pkid).subscribe({
+      next: roles => this.roles.set(roles)
+    });
+  }
+
+  private loadAllRoles(): void {
+    this.roleService.getAll().subscribe({
+      next: all => this.allRoleIds.set(all.map(r => ({ roleId: r.roleId, roleName: r.roleName })))
+    });
+  }
+
+  protected assignRole(): void {
+    const roleId = this.selectedRoleId();
+    if (!this.isEdit() || !roleId) {
+      return;
+    }
+
+    this.savingRole.set(true);
+    this.service.assignRole(this.pkid, roleId).subscribe({
+      next: roles => {
+        this.roles.set(roles);
+        this.selectedRoleId.set(null);
+        this.savingRole.set(false);
+        this.messageService.add({ severity: 'success', summary: '指派成功', detail: `已指派角色「${roleId}」。` });
+      },
+      error: err => {
+        this.savingRole.set(false);
+        const detail = err?.error?.message ?? '指派角色時發生錯誤。';
+        this.messageService.add({ severity: 'error', summary: '指派失敗', detail });
+      }
+    });
+  }
+
+  protected confirmRemoveRole(role: UserRole): void {
+    const userId = this.form.getRawValue().userId;
+    this.confirmationService.confirm({
+      header: '移除角色確認',
+      message: `確定要移除使用者「${userId}」的角色「${role.roleName} (${role.roleId})」？`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: '移除',
+      rejectLabel: '取消',
+      accept: () => this.removeRole(role.roleId)
+    });
+  }
+
+  private removeRole(roleId: string): void {
+    this.savingRole.set(true);
+    this.service.removeRole(this.pkid, roleId).subscribe({
+      next: () => {
+        this.roles.update(rs => rs.filter(r => r.roleId !== roleId));
+        this.savingRole.set(false);
+        this.messageService.add({ severity: 'success', summary: '移除成功', detail: `已移除角色「${roleId}」。` });
+      },
+      error: err => {
+        this.savingRole.set(false);
+        const detail = err?.error?.message ?? '移除角色時發生錯誤。';
+        this.messageService.add({ severity: 'error', summary: '移除失敗', detail });
       }
     });
   }
