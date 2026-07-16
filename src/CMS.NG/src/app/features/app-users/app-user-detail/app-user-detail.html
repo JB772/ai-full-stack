@@ -52,53 +52,6 @@
       <dd>{{ u.roleCount }}</dd>
     </dl>
   </div>
-
-  @if (isAdmin()) {
-    <div class="card">
-      <h2 class="card-title">角色管理 Roles</h2>
-
-      <div class="roles-current">
-        @for (role of roles(); track role.roleId) {
-          <span class="role-chip">
-            <p-tag [value]="role.roleName + ' (' + role.roleId + ')'" severity="info" />
-            <p-button
-              icon="pi pi-times"
-              severity="danger"
-              text="true"
-              rounded="true"
-              size="small"
-              [disabled]="savingRole()"
-              (onClick)="confirmRemoveRole(role)"
-              [attr.aria-label]="'移除角色 ' + role.roleId" />
-          </span>
-        } @empty {
-          <span class="roles-empty">尚未指派任何角色。</span>
-        }
-      </div>
-
-      <div class="roles-add">
-        <p-select
-          styleClass="roles-add-select"
-          appendTo="body"
-          [options]="assignableRoles()"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="選擇要指派的角色"
-          [filter]="true"
-          filterBy="label"
-          [showClear]="true"
-          [disabled]="savingRole() || assignableRoles().length === 0"
-          [ngModel]="selectedRoleId()"
-          (ngModelChange)="selectedRoleId.set($event)" />
-        <p-button
-          label="指派角色"
-          icon="pi pi-plus"
-          [loading]="savingRole()"
-          [disabled]="!selectedRoleId()"
-          (onClick)="assignRole()" />
-      </div>
-    </div>
-  }
 } @else if (loading()) {
   <div class="card">載入中…</div>
 }
