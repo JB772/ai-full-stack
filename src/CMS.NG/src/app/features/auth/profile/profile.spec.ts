@@ -140,6 +140,34 @@ describe('Profile', () => {
     expect(el.querySelector('[data-testid="complexity-error"]')).not.toBeNull();
   });
 
+  it('shows the complexity message exactly once when invalid (no duplicate hint + error)', () => {
+    const fixture = TestBed.createComponent(Profile);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    typeInto(el, 'newPassword', 'abcdefgh'); // invalid: only 1 class
+    fixture.detectChanges();
+
+    // The complexity text must appear once (the error), not twice (error + always-on hint).
+    const matches = Array.from(el.querySelectorAll('.field-hint, .field-error'))
+      .filter(e => e.textContent?.includes('至少需 8'));
+    expect(matches.length).toBe(1);
+    expect(matches[0].classList.contains('field-error')).toBeTrue();
+  });
+
+  it('shows the complexity message as a hint (once) before the field is invalid', () => {
+    const fixture = TestBed.createComponent(Profile);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Untouched field: guidance shows as a muted hint, and the error is absent.
+    const matches = Array.from(el.querySelectorAll('.field-hint, .field-error'))
+      .filter(e => e.textContent?.includes('至少需 8'));
+    expect(matches.length).toBe(1);
+    expect(matches[0].classList.contains('field-hint')).toBeTrue();
+    expect(el.querySelector('[data-testid="complexity-error"]')).toBeNull();
+  });
+
   it('does not call the API when the new password is too short', () => {
     const fixture = TestBed.createComponent(Profile);
     fixture.detectChanges();
