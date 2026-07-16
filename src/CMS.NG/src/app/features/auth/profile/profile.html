@@ -67,9 +67,10 @@
         class="w-full"
         formControlName="newPassword"
         autocomplete="new-password" />
-      <small class="field-hint">{{ complexityMessage }}</small>
       @if (showComplexityError()) {
         <div class="field-error" data-testid="complexity-error">{{ complexityMessage }}</div>
+      } @else {
+        <small class="field-hint">{{ complexityMessage }}</small>
       }
     </div>
 
