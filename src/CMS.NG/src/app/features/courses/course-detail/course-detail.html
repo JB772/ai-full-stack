@@ -7,6 +7,7 @@
   </div>
 
   <div class="page-actions">
+    <app-row-audit-badge [tableName]="'Course'" [pkid]="course()?.pkid ?? 0" />
     <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" (onClick)="back()" />
     <p-button label="編輯" icon="pi pi-pencil" (onClick)="edit()" [disabled]="!course()" />
   </div>

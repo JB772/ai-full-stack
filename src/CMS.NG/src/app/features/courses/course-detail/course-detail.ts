@@ -6,10 +6,11 @@ import { MessageService } from 'primeng/api';
 import QRCode from 'qrcode';
 import { Course } from '../course.model';
 import { CourseService } from '../course.service';
+import { RowAuditBadgeComponent } from '../../row-audit/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-course-detail',
-  imports: [ButtonModule, TagModule],
+  imports: [ButtonModule, TagModule, RowAuditBadgeComponent],
   templateUrl: './course-detail.html',
   styleUrl: './course-detail.scss'
 })

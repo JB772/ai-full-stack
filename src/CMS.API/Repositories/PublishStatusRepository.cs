@@ -1,11 +1,15 @@
+using System.Data;
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Models;
 using Dapper;
 
 namespace CMS.API.Repositories;
 
-public class PublishStatusRepository(IDbConnectionFactory connectionFactory) : IPublishStatusRepository
+public class PublishStatusRepository(IDbConnectionFactory connectionFactory, RowAuditWriter auditWriter) : IPublishStatusRepository
 {
+    private const string TableName = "PublishStatus";
+
     private const string SelectColumns = """
         SELECT p.pkid, p.Description, p.IsDraft, p.IsPublished, p.IsDiscontinued,
                (SELECT COUNT(*) FROM Course c     WHERE c.PublishStatus_pkid = p.pkid) AS CourseCount,
@@ -79,7 +83,14 @@ public class PublishStatusRepository(IDbConnectionFactory connectionFactory) : I
             """;
 
         using var conn = connectionFactory.CreateConnection();
-        await conn.ExecuteAsync(sql, request);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        await conn.ExecuteAsync(sql, request, tx);
+        var created = await LoadByPkidAsync(conn, request.Pkid, tx);
+        await auditWriter.LogInsertAsync(TableName, created!, conn, tx);
+
+        tx.Commit();
         return request.Pkid;
     }
 
@@ -96,13 +107,48 @@ public class PublishStatusRepository(IDbConnectionFactory connectionFactory) : I
             """;
 
         using var conn = connectionFactory.CreateConnection();
-        return await conn.ExecuteAsync(sql, request) > 0;
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        // Load the "before" first so the audit can compare it against the post-update "after".
+        var before = await LoadByPkidAsync(conn, request.Pkid, tx);
+        if (before is null)
+        {
+            return false;
+        }
+
+        await conn.ExecuteAsync(sql, request, tx);
+        var after = await LoadByPkidAsync(conn, request.Pkid, tx);
+        await auditWriter.LogUpdateAsync(TableName, before, after!, conn, tx);
+
+        tx.Commit();
+        return true;
     }
 
     public async Task<bool> DeleteAsync(byte pkid)
     {
         using var conn = connectionFactory.CreateConnection();
-        return await conn.ExecuteAsync(
-            "DELETE FROM PublishStatus WHERE pkid = @Pkid", new { Pkid = pkid }) > 0;
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        // Load the row first so its first string column is available for the audit's ActionDesc.
+        var row = await LoadByPkidAsync(conn, pkid, tx);
+        if (row is null)
+        {
+            return false;
+        }
+
+        await conn.ExecuteAsync("DELETE FROM PublishStatus WHERE pkid = @Pkid", new { Pkid = pkid }, tx);
+        await auditWriter.LogDeleteAsync(TableName, row, conn, tx);
+
+        tx.Commit();
+        return true;
     }
+
+    /// <summary>Loads a row on an existing open connection/transaction — used inside the write transactions
+    /// so the audit sees the same in-flight state (a standalone GetByPkidAsync would open its own connection
+    /// and could not see the uncommitted change).</summary>
+    private static async Task<PublishStatus?> LoadByPkidAsync(IDbConnection conn, byte pkid, IDbTransaction tx)
+        => await conn.QuerySingleOrDefaultAsync<PublishStatus>(
+            $"{SelectColumns} WHERE p.pkid = @Pkid", new { Pkid = pkid }, tx);
 }

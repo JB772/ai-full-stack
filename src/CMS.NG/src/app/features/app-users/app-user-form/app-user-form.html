@@ -5,6 +5,9 @@
     </div>
 
     <div class="page-actions">
+      @if (isEdit()) {
+        <app-row-audit-badge [tableName]="'AppUser'" [pkid]="pkid" />
+      }
       <p-button label="取消" icon="pi pi-times" severity="secondary" type="button" (onClick)="cancel()" />
       @if (isEdit() && isAdmin()) {
         <p-button

@@ -1,11 +1,15 @@
+using System.Data;
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Models;
 using Dapper;
 
 namespace CMS.API.Repositories;
 
-public class AppRoleRepository(IDbConnectionFactory connectionFactory) : IAppRoleRepository
+public class AppRoleRepository(IDbConnectionFactory connectionFactory, RowAuditWriter auditWriter) : IAppRoleRepository
 {
+    private const string TableName = "AppRole";
+
     private const string SelectColumns = """
         SELECT r.pkid, r.RoleId, r.RoleName, r.PermissionLevel, r.Description,
                (SELECT COUNT(*) FROM AppUserRole ur WHERE ur.RoleId = r.RoleId) AS UserCount
@@ -76,7 +80,15 @@ public class AppRoleRepository(IDbConnectionFactory connectionFactory) : IAppRol
             """;
 
         using var conn = connectionFactory.CreateConnection();
-        return await conn.ExecuteScalarAsync<int>(sql, request);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var pkid = await conn.ExecuteScalarAsync<int>(sql, request, tx);
+        var created = await LoadByPkidAsync(conn, pkid, tx);
+        await auditWriter.LogInsertAsync(TableName, created!, conn, tx);
+
+        tx.Commit();
+        return pkid;
     }
 
     /// <summary>RoleId is the natural key referenced by AppUserRole, so it is not updatable.</summary>
@@ -91,14 +103,46 @@ public class AppRoleRepository(IDbConnectionFactory connectionFactory) : IAppRol
             """;
 
         using var conn = connectionFactory.CreateConnection();
-        return await conn.ExecuteAsync(sql, request) > 0;
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var before = await LoadByPkidAsync(conn, request.Pkid, tx);
+        if (before is null)
+        {
+            return false;
+        }
+
+        await conn.ExecuteAsync(sql, request, tx);
+        var after = await LoadByPkidAsync(conn, request.Pkid, tx);
+        await auditWriter.LogUpdateAsync(TableName, before, after!, conn, tx);
+
+        tx.Commit();
+        return true;
     }
 
     public async Task<bool> DeleteAsync(int pkid)
     {
         using var conn = connectionFactory.CreateConnection();
-        return await conn.ExecuteAsync("DELETE FROM AppRole WHERE pkid = @Pkid", new { Pkid = pkid }) > 0;
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+
+        var row = await LoadByPkidAsync(conn, pkid, tx);
+        if (row is null)
+        {
+            return false;
+        }
+
+        await conn.ExecuteAsync("DELETE FROM AppRole WHERE pkid = @Pkid", new { Pkid = pkid }, tx);
+        await auditWriter.LogDeleteAsync(TableName, row, conn, tx);
+
+        tx.Commit();
+        return true;
     }
+
+    /// <summary>Loads a row on an existing open connection/transaction (see PublishStatusRepository).</summary>
+    private static async Task<AppRole?> LoadByPkidAsync(IDbConnection conn, int pkid, IDbTransaction tx)
+        => await conn.QuerySingleOrDefaultAsync<AppRole>(
+            $"{SelectColumns} WHERE r.pkid = @Pkid", new { Pkid = pkid }, tx);
 
     public async Task<int> GetUserCountAsync(int pkid)
     {

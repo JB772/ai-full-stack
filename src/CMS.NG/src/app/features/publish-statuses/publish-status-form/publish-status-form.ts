@@ -8,10 +8,11 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { MessageService } from 'primeng/api';
 import { PublishStatusRequest } from '../publish-status.model';
 import { PublishStatusService } from '../publish-status.service';
+import { RowAuditBadgeComponent } from '../../row-audit/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-publish-status-form',
-  imports: [ReactiveFormsModule, ButtonModule, CheckboxModule, InputTextModule, InputNumberModule],
+  imports: [ReactiveFormsModule, ButtonModule, CheckboxModule, InputTextModule, InputNumberModule, RowAuditBadgeComponent],
   templateUrl: './publish-status-form.html',
   styleUrl: './publish-status-form.scss'
 })
@@ -26,7 +27,8 @@ export class PublishStatusForm implements OnInit {
   protected readonly loading = signal(false);
   protected readonly saving = signal(false);
 
-  private pkid = 0;
+  /** Shown in the edit-mode toolbar (row-audit badge), so the template needs access. */
+  protected pkid = 0;
 
   protected readonly form = this.fb.nonNullable.group({
     // pkid is a caller-supplied tinyint, so on create it is a required, user-entered field.

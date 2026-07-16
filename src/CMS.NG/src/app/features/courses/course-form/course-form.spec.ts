@@ -12,6 +12,7 @@ import { PublishStatusService } from '../../publish-statuses/publish-status.serv
 import { Partner } from '../../partners/partner.model';
 import { CourseGroup } from '../../course-groups/course-group.model';
 import { PublishStatus } from '../../publish-statuses/publish-status.model';
+import { RowAuditService } from '../../row-audit/row-audit.service';
 
 function makeCourse(overrides: Partial<Course> = {}): Course {
   return {
@@ -117,6 +118,7 @@ describe('CourseForm', () => {
         { provide: PartnerService, useValue: partnerService },
         { provide: CourseGroupService, useValue: courseGroupService },
         { provide: PublishStatusService, useValue: publishStatusService },
+        { provide: RowAuditService, useValue: { getForRecord: () => of([]) } },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map(id ? [['id', id]] : []) } } }
       ]
     }).compileComponents();

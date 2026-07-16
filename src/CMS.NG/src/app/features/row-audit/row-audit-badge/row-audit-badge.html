@@ -1,0 +1,54 @@
+<button
+  type="button"
+  class="row-audit-badge"
+  (click)="openDialog()"
+  aria-label="異動紀錄 History"
+>
+  <i class="pi pi-history" aria-hidden="true"></i>
+  <span class="rab-title">異動紀錄 History</span>
+  @if (loading()) {
+    <span class="rab-summary rab-muted">載入中…</span>
+  } @else if (latest(); as l) {
+    <span class="rab-summary">
+      {{ l.actionType }} by {{ l.userName }} · {{ l.dateTime | date: 'yyyy-MM-dd HH:mm' }}
+    </span>
+  } @else {
+    <span class="rab-summary rab-muted">尚無異動紀錄 No history</span>
+  }
+</button>
+
+<p-dialog
+  header="異動紀錄 History"
+  [visible]="dialogVisible()"
+  (visibleChange)="dialogVisible.set($event)"
+  [modal]="true"
+  [dismissableMask]="true"
+  [draggable]="false"
+  [style]="{ width: '46rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+>
+  @if (entries().length > 0) {
+    <table class="row-audit-table">
+      <thead>
+        <tr>
+          <th>異動時間 DateTime</th>
+          <th>異動者 User</th>
+          <th>類型 Action</th>
+          <th>說明 Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (e of entries(); track $index) {
+          <tr>
+            <td class="ra-datetime">{{ e.dateTime | date: 'yyyy-MM-dd HH:mm:ss' }}</td>
+            <td>{{ e.userName }}</td>
+            <td>{{ e.actionType }}</td>
+            <td class="ra-desc">{{ e.actionDesc || '—' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  } @else {
+    <p class="row-audit-empty">尚無任何異動紀錄 No history yet</p>
+  }
+</p-dialog>

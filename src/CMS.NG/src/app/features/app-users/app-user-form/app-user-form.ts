@@ -8,10 +8,11 @@ import { ConfirmationService, MessageService } from 'primeng/api';
 import { AppUserRequest } from '../app-user.model';
 import { AppUserService } from '../app-user.service';
 import { AuthService } from '../../auth/auth.service';
+import { RowAuditBadgeComponent } from '../../row-audit/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-app-user-form',
-  imports: [ReactiveFormsModule, ButtonModule, InputTextModule, CheckboxModule],
+  imports: [ReactiveFormsModule, ButtonModule, InputTextModule, CheckboxModule, RowAuditBadgeComponent],
   templateUrl: './app-user-form.html',
   styleUrl: './app-user-form.scss'
 })
@@ -33,7 +34,8 @@ export class AppUserForm implements OnInit {
   // backend enforces the Admin role regardless — hiding the button is not the security control).
   protected readonly isAdmin = this.authService.isAdmin;
 
-  private pkid = 0;
+  /** Shown in the edit-mode toolbar (row-audit badge), so the template needs access. */
+  protected pkid = 0;
 
   // No password control — the password is seeded from SysConfig on the backend and only changed
   // via the reset-password action. No pkid control — it is an int IDENTITY.

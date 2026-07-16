@@ -5,6 +5,9 @@
     </div>
 
     <div class="page-actions">
+      @if (isEdit()) {
+        <app-row-audit-badge [tableName]="'PublishStatus'" [pkid]="pkid" />
+      }
       <p-button label="取消" icon="pi pi-times" severity="secondary" type="button" (onClick)="cancel()" />
       <p-button label="儲存" icon="pi pi-check" severity="success" type="submit" [loading]="saving()" />
     </div>

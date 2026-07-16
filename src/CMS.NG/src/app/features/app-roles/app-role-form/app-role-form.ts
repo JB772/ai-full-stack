@@ -7,10 +7,11 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { MessageService } from 'primeng/api';
 import { AppRoleRequest } from '../app-role.model';
 import { AppRoleService } from '../app-role.service';
+import { RowAuditBadgeComponent } from '../../row-audit/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-app-role-form',
-  imports: [ReactiveFormsModule, ButtonModule, InputTextModule, InputNumberModule],
+  imports: [ReactiveFormsModule, ButtonModule, InputTextModule, InputNumberModule, RowAuditBadgeComponent],
   templateUrl: './app-role-form.html',
   styleUrl: './app-role-form.scss'
 })
@@ -25,7 +26,8 @@ export class AppRoleForm implements OnInit {
   protected readonly loading = signal(false);
   protected readonly saving = signal(false);
 
-  private pkid = 0;
+  /** Shown in the edit-mode toolbar (row-audit badge), so the template needs access. */
+  protected pkid = 0;
 
   protected readonly form = this.fb.nonNullable.group({
     roleId: ['', [Validators.required, Validators.maxLength(200)]],

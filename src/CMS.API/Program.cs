@@ -1,5 +1,7 @@
 using System.Text;
+using CMS.API.Auditing;
 using CMS.API.Data;
+using CMS.API.Middleware;
 using CMS.API.Repositories;
 using CMS.API.Security;
 using Dapper;
@@ -59,6 +61,8 @@ builder.Services.AddCors(options =>
         .AllowCredentials());
 });
 
+builder.Services.AddHttpContextAccessor();
+
 builder.Services.AddSingleton<IDbConnectionFactory, SqlConnectionFactory>();
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 builder.Services.AddSingleton<JwtSigningKeyProvider>();
@@ -72,6 +76,11 @@ builder.Services.AddScoped<ICourseRepository, CourseRepository>();
 builder.Services.AddScoped<IFeaturedPromoItemRepository, FeaturedPromoItemRepository>();
 builder.Services.AddScoped<ITrainingCenterRepository, TrainingCenterRepository>();
 builder.Services.AddScoped<IPromotionRepository, PromotionRepository>();
+builder.Services.AddScoped<IRowAuditRepository, RowAuditRepository>();
+
+// Cross-cutting row audit writer — repositories call it after Insert / Update / Delete.
+// Scoped so it can read the current request's JWT via IHttpContextAccessor.
+builder.Services.AddScoped<RowAuditWriter>();
 
 // JWT bearer authentication. The signing key is the same SysConfig['appConfig'].symmetricSecurityKey
 // used to issue tokens; it is resolved at runtime (via JwtSigningKeyProvider), never hard-coded.
@@ -114,6 +123,13 @@ app.UseSwaggerUI(options =>
 });
 
 app.UseCors(LocalhostCorsPolicy);
+
+// Sits just inside CORS so it wraps authentication, authorization and every controller/repository:
+// any unhandled exception becomes a single generic 500 JSON body (full detail logged server-side),
+// while the CORS headers already applied let the browser read that body. Auth failures (401/403) and
+// validation (400) are produced without throwing, so they pass through untouched.
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

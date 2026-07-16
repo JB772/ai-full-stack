@@ -6,6 +6,7 @@ import { of, throwError } from 'rxjs';
 import { AppRoleDetail } from './app-role-detail';
 import { AppRoleService } from '../app-role.service';
 import { AppRole } from '../app-role.model';
+import { RowAuditService } from '../../row-audit/row-audit.service';
 
 describe('AppRoleDetail', () => {
   let fixture: ComponentFixture<AppRoleDetail>;
@@ -32,6 +33,7 @@ describe('AppRoleDetail', () => {
         provideNoopAnimations(),
         MessageService,
         { provide: AppRoleService, useValue: service },
+        { provide: RowAuditService, useValue: { getForRecord: () => of([]) } },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map([['id', id]]) } } }
       ]
     }).compileComponents();

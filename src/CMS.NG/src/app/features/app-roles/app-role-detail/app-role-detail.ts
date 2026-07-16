@@ -4,10 +4,11 @@ import { ButtonModule } from 'primeng/button';
 import { MessageService } from 'primeng/api';
 import { AppRole } from '../app-role.model';
 import { AppRoleService } from '../app-role.service';
+import { RowAuditBadgeComponent } from '../../row-audit/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-app-role-detail',
-  imports: [RouterLink, ButtonModule],
+  imports: [RouterLink, ButtonModule, RowAuditBadgeComponent],
   templateUrl: './app-role-detail.html',
   styleUrl: './app-role-detail.scss'
 })

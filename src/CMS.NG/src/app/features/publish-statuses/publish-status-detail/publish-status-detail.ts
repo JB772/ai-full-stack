@@ -4,10 +4,11 @@ import { ButtonModule } from 'primeng/button';
 import { MessageService } from 'primeng/api';
 import { PublishStatus } from '../publish-status.model';
 import { PublishStatusService } from '../publish-status.service';
+import { RowAuditBadgeComponent } from '../../row-audit/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-publish-status-detail',
-  imports: [RouterLink, ButtonModule],
+  imports: [RouterLink, ButtonModule, RowAuditBadgeComponent],
   templateUrl: './publish-status-detail.html',
   styleUrl: './publish-status-detail.scss'
 })

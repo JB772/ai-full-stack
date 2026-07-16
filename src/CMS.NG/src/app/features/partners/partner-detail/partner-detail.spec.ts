@@ -6,6 +6,7 @@ import { of, throwError } from 'rxjs';
 import { PartnerDetail } from './partner-detail';
 import { PartnerService } from '../partner.service';
 import { Partner } from '../partner.model';
+import { RowAuditService } from '../../row-audit/row-audit.service';
 
 describe('PartnerDetail', () => {
   let fixture: ComponentFixture<PartnerDetail>;
@@ -45,6 +46,7 @@ describe('PartnerDetail', () => {
         provideNoopAnimations(),
         MessageService,
         { provide: PartnerService, useValue: service },
+        { provide: RowAuditService, useValue: { getForRecord: () => of([]) } },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map([['id', '1']]) } } }
       ]
     }).compileComponents();
