@@ -1,0 +1,22 @@
+# Line endings.
+#
+# core.autocrlf is a *per-machine* setting, so a clean history depends on every
+# clone being configured correctly. This moves that guarantee into the repo,
+# where it travels with the code — JB772/ai-full-stack is public, and the first
+# CRLF file committed by a differently-configured clone lands as a whole-file
+# diff that is tedious to unpick.
+#
+# Verified 2026-07-17 before adding: all 292 tracked text files were already LF
+# in the index (0 with CRLF), so this normalizes nothing and produces no diff.
+# That is why it was cheap to add now; the cost only rises once a CRLF file is in.
+#
+# Working trees are unaffected: Windows checkouts still get CRLF via autocrlf.
+# Only what Git stores is pinned to LF.
+* text=auto
+
+# Binary — never normalize line endings, never diff as text.
+# The fonts are 11.5 MB of OTF; a botched text conversion would corrupt them
+# silently (see TODOS P2 on the Noto Sans TC payload).
+*.otf binary
+*.png binary
+*.ico binary
