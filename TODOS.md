@@ -378,16 +378,21 @@ Nine findings were fixed on `develop` (`396a404`..`42a3890`); these were deliber
 and screenshots: `~/.gstack/projects/JB772-ai-full-stack/designs/design-audit-20260717/` (machine-local —
 the findings are restated here so a fresh clone isn't chasing a path it can't reach).
 
-### a) `--p-red-500` fails WCAG AA and is the house error colour
+### ~~a) `--p-red-500` fails WCAG AA and is the house error colour~~ — FIXED 2026-07-17
 
-- **What:** `#ef4444` measures **3.76:1** on white against a 4.5:1 floor. Used for `.required-mark`
-  (`styles.scss:66`), `.field-error` (`styles.scss:81`) and `course-list.scss:28`. Every inline validation
-  message in the app is below AA.
-- **Context:** `--p-red-600` (`#dc2626`, **4.83:1**) passes and is already in the theme. FINDING-002 used it
-  for the promo Delete link for exactly this reason, so the two reds now disagree — worth reconciling in one
-  pass rather than drifting.
-- **Not fixed here:** it is app-wide and outside the page under audit.
-- **Effort:** S (human) → S (CC). **Priority:** P3.
+**Fixed by /design-review on `develop`, 2026-07-17 (`51be932`).** All three usages moved from
+`--p-red-500` (`#ef4444`, **3.76:1** on white — below the 4.5:1 floor) to `--p-red-600` (`#dc2626`,
+**4.83:1**): `.required-mark` and `.field-error` (`styles.scss`), `.cell-error` (`course-list.scss`).
+All three are small text (12–12.8px), so the large-text 3:1 exemption never applied. Zero `p-red-500`
+remain in `src/CMS.NG`. The app now has one red — this also settles the disagreement FINDING-002
+introduced by using red-600 for the promo Delete link.
+
+**One thing worth keeping if this ever changes:** red-600 passes on white (4.83:1) but is only
+**4.41:1** on `--p-content-hover-background` (`#f1f5f9`) — a fail. It is safe today only because this
+theme applies **no row-hover background** (verified by really hovering a `p-table` row: it stays
+`#ffffff`), and because `.field`/`.card` resolve to white rather than the grey `--p-surface-100` page
+background. **If a row-hover background is ever switched on, or an error is ever rendered outside a
+white card, red-600 fails and red-700 (`#b91c1c`, 6.47:1 / 5.91:1) is required.**
 
 ### b) The promo grid is undesigned below ~1280px
 
