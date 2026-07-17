@@ -289,7 +289,20 @@ Filed because they were surfaced and left unanswered, not because they are urgen
 - **Effort:** M (human) → S (CC). **Priority:** P3.
 - **Depends on:** the Course print feature shipping first; a second entity actually needing it.
 
-## P2 — The dev servers run from the `feature-course-pdf` worktree, not the main checkout
+## ~~P2 — The dev servers run from the `feature-course-pdf` worktree, not the main checkout~~ — RESOLVED 2026-07-17
+
+**Fixed by /design-review on `develop`, 2026-07-17.** Both dev servers were stopped and restarted from
+`C:/dev/cms`; verified via `Get-CimInstance Win32_Process` that `:5000` now runs
+`C:\dev\cms\src\CMS.API\bin\Debug\net9.0\CMS.API.exe` and `:4200` runs
+`C:\dev\cms\src\CMS.NG\node_modules\...\ng.js serve`. The condition below recurs whenever the servers are
+next started from a worktree, so the detection recipe is kept.
+
+**The four worktrees are still registered** (`CourseGroup`, `CourseGroup-CRUD`, `feature-course-pdf`,
+`Freeze_Course_Form_Toolbar`), three on merged or stale branches — so the underlying trap is intact. The
+retire-the-worktree half of the fix below was **not** done.
+
+<details>
+<summary>Original item (detection recipe still useful)</summary>
 
 - **What:** Both dev processes serve a different tree than `develop`. `ng serve` (:4200) serves
   `C:/dev/cms/.claude/worktrees/feature-course-pdf/src/CMS.NG`, and `CMS.API.exe` (:5000) runs
@@ -310,6 +323,8 @@ Filed because they were surfaced and left unanswered, not because they are urgen
   `feature-course-pdf` worktree (PR #10 is already merged; `git worktree remove` it). Four
   worktrees are currently registered, three on already-merged or stale branches.
 - **Effort:** S (human) → S (CC). **Priority:** P2.
+
+</details>
 
 ## P3 — Fixes found by the 2026-07-17 /qa run, not yet applied
 
@@ -355,4 +370,65 @@ Filed because they were surfaced and left unanswered, not because they are urgen
   `上架中~~` — real tilde characters in the stored data, surfacing in the Course list 上架狀態
   column and the course form's FK dropdown — and `PublishStatus` #55 is a leftover `test` row
   (0 courses, 0 promos). The database is the source of truth; both need a data decision, not a fix.
+- **Effort:** S (human) → S (CC). **Priority:** P3.
+
+## P3 — Deferred by the 2026-07-17 /design-review run
+
+Nine findings were fixed on `develop` (`396a404`..`42a3890`); these were deliberately left. Full report
+and screenshots: `~/.gstack/projects/JB772-ai-full-stack/designs/design-audit-20260717/` (machine-local —
+the findings are restated here so a fresh clone isn't chasing a path it can't reach).
+
+### a) `--p-red-500` fails WCAG AA and is the house error colour
+
+- **What:** `#ef4444` measures **3.76:1** on white against a 4.5:1 floor. Used for `.required-mark`
+  (`styles.scss:66`), `.field-error` (`styles.scss:81`) and `course-list.scss:28`. Every inline validation
+  message in the app is below AA.
+- **Context:** `--p-red-600` (`#dc2626`, **4.83:1**) passes and is already in the theme. FINDING-002 used it
+  for the promo Delete link for exactly this reason, so the two reds now disagree — worth reconciling in one
+  pass rather than drifting.
+- **Not fixed here:** it is app-wide and outside the page under audit.
+- **Effort:** S (human) → S (CC). **Priority:** P3.
+
+### b) The promo grid is undesigned below ~1280px
+
+- **What:** at 375px the sidebar never collapses, the CJK page title wraps to one character per line, the
+  training-centre tabs stack vertically, and the grid overflows horizontally. The three data columns are
+  fixed at `18rem`/`20rem`/`12rem` min, so ~55rem is the floor.
+- **Why deferred:** this is a responsive project, not a design-pass fix, and the app is a desktop-only
+  internal tool. Filed so the decision is explicit rather than accidental. **Pre-existing — not a
+  regression from the 2026-07-17 fixes.**
+- **Evidence:** `designs/design-audit-20260717/screenshots/promo-mobile.png`.
+- **Effort:** L (human) → M (CC). **Priority:** P3, or P1 the day anyone opens this on a tablet.
+
+### c) The reorder controls are still below the 44px touch target
+
+- **What:** `▼`/`▲` in `.slot-move` are **24×21px** after FINDING-003 (up from 16×21px). The guideline is 44px.
+- **Why deferred:** the row is 43px tall; reaching 44px means redesigning row density for the whole grid.
+  Bundle it with (b) if mobile is ever addressed.
+- **Effort:** M (human) → S (CC). **Priority:** P3.
+
+### d) Week and training-centre selection are not in the URL
+
+- **What:** `/featured-promo-items` carries no state. The selected week and centre survive a full reload
+  (so they are persisted somewhere), but cannot be linked, shared, or bookmarked — "look at 高雄 for 8/17"
+  is not a URL.
+- **Why it's not cosmetic:** it defeated a verification step during this run — a reload landed back on
+  高雄/8/17 rather than a default, which read as a stale page until traced.
+- **Fix shape:** query params (`?center=3&week=2026-08-17`), matching the checklist rule that URL reflects
+  state. Behavioural change, hence deferred out of a design pass.
+- **Effort:** S (human) → S (CC). **Priority:** P3.
+
+### e) The reorder arrows are ordered down-then-up
+
+- **What:** `featured-promo-item-list.html:76-77` renders `▼` (往下移) before `▲` (往上移). Up-then-down is
+  the convention. Left alone because reordering is behavioural, not styling.
+- **Effort:** S (human) → S (CC). **Priority:** P3.
+
+### f) `<i>` flag icons carry `aria-label` with no role
+
+- **What:** `publish-status-list.html:55,59,63` put `[attr.aria-label]` on bare `<i>` elements. On a plain
+  `<i>` with no `role`, `aria-label` is not reliably announced. These were **deliberately left** during the
+  FINDING-009 sweep, which only retargeted `p-button`.
+- **Relation to the /qa item above:** same family as *"Inline field errors are not wired to their inputs"* —
+  both are the house a11y pattern being approximate. Worth one pass together.
 - **Effort:** S (human) → S (CC). **Priority:** P3.
