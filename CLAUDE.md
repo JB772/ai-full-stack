@@ -2,9 +2,8 @@
 
 Guidance for Claude Code when working in this repository.
 
-> **How to read this file.** Only safety-critical rules and the doc index live here.
-> Everything else is in `docs/*.md` — open the relevant file **before** working in an area.
-> Read the doc, don't reconstruct it.
+> **How to read this file.** Only always-needed rules and the doc index live here. Detail lives in
+> `docs/*.md` — open the relevant file **before** working in an area. Read the doc, don't reconstruct it.
 
 ## What this is
 
@@ -17,14 +16,12 @@ shape before writing code against it.
 | `database/*.sql` | The schema. Reference only. |
 | `spec/code-gen.convention.md` | **The** code-gen convention — read before adding any feature. |
 | `spec/{sub-system}/{Table}.md` | Built feature specs. `sample1/2.spec.md` are **aspirational** — don't conflate. |
-| `docs/*.md` | Deep-dive references — see the index table below. |
+| `docs/*.md` | Deep-dive references — index below. |
+| `TODOS.md` | Backlog **plus the settled decisions behind it** — read before re-raising any finding. |
 | `src/CMS.API` / `src/CMS.API.Tests` | .NET 9 Web API, Dapper, Swagger, port 5000 / xUnit. |
 | `src/CMS.NG` | Angular 20 standalone + PrimeNG 20, port 4200. |
 
 ## Commands
-
-Node is on PATH — just run the commands. If a shell says `node: command not found`, its environment is
-stale (predates the install); restart the session, or prepend for that shell → **`docs/environment.md`**.
 
 ```powershell
 dotnet run --project src\CMS.API      # API + Swagger at http://localhost:5000/swagger
@@ -33,25 +30,30 @@ cd src\CMS.NG; npm start              # http://localhost:4200
 cd src\CMS.NG; npm test               # Karma + Jasmine (headless needs CHROME_BIN)
 ```
 
-Windows traps (a running API breaks `dotnet test` with `MSB3021`, `.ps1` policy, headless
-Chrome, UTF-8 curl) → **`docs/environment.md`**.
+Windows traps (`node: command not found` in a stale shell, a running API breaking `dotnet test` with
+`MSB3021`, `.ps1` policy, headless Chrome, UTF-8 curl) → **`docs/environment.md`**.
 
 ## Hard rules — never violate
 
-- **The database is real** — test writes land in the live DB. Test via `CMS.API.Tests`
-  (in-memory fakes) or portable-SQL SQLite → `docs/schema-and-testing.md`.
+- **The database is real** — test writes land in the live DB. Test via `CMS.API.Tests` (in-memory
+  fakes) or portable-SQL SQLite → `docs/schema-and-testing.md`.
 - **New repositories must be swapped in `CmsApiFactory`** — miss one and tests hit real SQL Server.
-- **Every repository write is audited** (`RowAuditWriter`, same connection + transaction);
-  **every detail/edit page** carries `RowAuditBadgeComponent` → `docs/row-audit.md`.
-- **No per-controller `try/catch`** — the global middleware owns unexpected errors; frontend
-  errors flow only through `authInterceptor` → `docs/exception-handling.md`.
+- **Every repository write is audited**; **every detail/edit page** carries `RowAuditBadgeComponent`
+  → `docs/row-audit.md`.
+- **No per-controller `try/catch`** — the global middleware owns unexpected errors; frontend errors
+  flow only through `authInterceptor` → `docs/exception-handling.md`.
 - **Auth is global** — only login is anonymous; tests use `CreateAuthenticatedClient()`; frontend
   specs seed `auth-profile` in session storage first → `docs/auth.md`.
-- **The「系統管理 Admin」nav group is Admin-only, enforced server-side** — `AppRoles` + `AppUsers` are
-  `[Authorize(Roles = "Admin")]` at class level; `PublishStatuses` gates **writes only** (its list feeds the
-  course form's FK dropdown). `adminGuard` on the route subtree is usability; nav hiding is cosmetic. Only
-  the attribute is the boundary → `docs/auth.md` § "The Admin boundary".
+- **The「系統管理 Admin」nav group is Admin-only, enforced server-side** — only the
+  `[Authorize(Roles = "Admin")]` attribute is the boundary; route guard and nav hiding are
+  usability/cosmetic. `PublishStatuses` gates writes only → `docs/auth.md` § "The Admin boundary".
+- **Open security findings are deferred by decision, not oversight** — valid only while the app is
+  localhost-only; if a re-open trigger goes true, re-score **before** deploying
+  → `TODOS.md` § "Security findings — deferred by decision".
 - **`nchar(n)` columns need `RTRIM()`** in every SELECT.
+- **Design/a11y conventions are load-bearing** — red-as-text is `--p-red-600`, never `red-500`
+  (fails WCAG AA); icon-only `p-button` needs the `ariaLabel` **input**, not `[attr.aria-label]`
+  → `docs/ui-patterns.md` § "Design & a11y conventions".
 - **`/crud` skill layout is wrong for this repo** (assumes `core/` + `AuditHelper`) — follow the code.
 - **PrimeNG major tracks Angular's** (20 → 20); `primeng@latest` pulls v21 and fails peer resolution.
 
@@ -67,13 +69,19 @@ Chrome, UTF-8 curl) → **`docs/environment.md`**.
 | `docs/exception-handling.md` | touching error handling: global 500 middleware, `authInterceptor`, spec requirements |
 | `docs/delete-guards.md` | writing any DELETE: 409 guards, multi-child messages, `ON DELETE CASCADE` checks |
 | `docs/relationships-and-nav.md` | FKs or N-N: multi-map nav objects, nullable-FK `LEFT JOIN`, `forkJoin` lookups, date ⇄ `p-datepicker`, the `AppUserRole` N-N editor |
-| `docs/ui-patterns.md` | building a frontend page: sticky toolbar, QR, PDF export, inline editing, overlay blur trap — these are load-bearing, read before reaching for any |
+| `docs/ui-patterns.md` | building a frontend page: sticky toolbar, QR, PDF export, inline editing, overlay blur trap, design/a11y conventions — load-bearing, read before reaching for any |
 | `docs/schema-and-testing.md` | reading schema / writing tests: constraint traps (keys may lack UNIQUE indexes, two-FK ≠ junction, multi-file `.sql`), `p-table` sort gotchas |
 | `docs/environment.md` | any Windows/PowerShell dev trap |
 
-## gstack
+## Skill routing
 
-The [gstack](https://github.com/garrytan/gstack) skill suite is installed (`~/.claude/skills/gstack`).
+The [gstack](https://github.com/garrytan/gstack) skill suite is installed. **Use `/browse` for all
+web browsing; never use `mcp__claude-in-chrome__*` tools.**
 
-- **Use `/browse` for all web browsing** (fast headless Chromium).
-- **Never use `mcp__claude-in-chrome__*` tools** — route browsing through `/browse`.
+When a request matches a skill, invoke it via the Skill tool: bugs/errors → `/investigate` ·
+QA site behavior → `/qa` (report-only: `/qa-only`) · code review → `/review` · visual polish →
+`/design-review` · ship/deploy/PR → `/ship` · plan reviews → `/plan-eng-review`, `/plan-ceo-review`,
+`/plan-design-review` (all: `/autoplan`) · spec/issue authoring → `/spec` · brainstorming →
+`/office-hours` · save/resume context → `/context-save`, `/context-restore`.
+
+Exception: `/crud` — its layout doesn't match this repo (see hard rule); follow the code.

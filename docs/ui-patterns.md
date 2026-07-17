@@ -51,6 +51,24 @@ Hand-rolled, **not `pEditableColumn`.** The `course-list` cell editor is a compo
 requirement was double-click only. Don't reach for `pEditableColumn` / `p-cellEditor`. Full pattern:
 Course row in `reference-features.md`.
 
+## Design & a11y conventions (2026-07-17 design review)
+
+**Red that carries meaning as text is `--p-red-600`, never `--p-red-500`.** red-500 (`#ef4444`) is
+3.76:1 on white and fails WCAG AA for normal-size text; red-600 (`#dc2626`) is 4.83:1. The app's
+red-as-text classes — `.required-mark`, `.field-error` (styles.scss) and `.cell-error`
+(course-list.scss) — are all 12–12.8px, so the large-text 3:1 exemption never applies. **Verify the
+actual background rather than assuming white:** red-600 is only 4.41:1 on
+`--p-content-hover-background` (`#f1f5f9`), so red text that must stay readable on a hovered row
+needs red-700. (This theme applies no row-hover background to `p-table` rows, which is the only
+reason `.cell-error` passes.)
+
+**Icon-only `p-button` takes the `ariaLabel` input, not `[attr.aria-label]`.** The `attr` binding
+sets the attribute on the `<p-button>` host element rather than the inner native `<button>`, so the
+button announces as a bare unnamed "button" to screen readers — the tooltip does not save it.
+PrimeNG's `ariaLabel` input forwards to the inner button. The exception is elements that *are* the
+target: a plain `<button>` (e.g. the sidebar toggle), a `role="table"` div (the scheduler), or the
+PublishStatus `<i>` flags — there `[attr.aria-label]` already lands on the right element.
+
 ## Overlay editors must not commit on blur
 
 `p-select` and `p-datepicker` panels are `appendTo="body"`, so a blur-to-save fires the instant you click
