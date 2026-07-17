@@ -3,11 +3,19 @@
 Non-obvious local-dev traps. **None are code problems.** The commands themselves live in `CLAUDE.md`
 under **Commands** — this file is the "why it broke" reference.
 
-## Node is not on PATH
+## Node — normally already on PATH
 
-Prepend it in every shell:
+`C:\Program Files\nodejs` is on the persisted user PATH, so `node` / `npm` / `npx` resolve with no setup
+(verified 2026-07-16: `node --version` → v24.18.0 in both plain Bash and plain PowerShell).
+
+Only if a shell reports `node: command not found` — which happens when the session's environment predates
+the install and is therefore stale — either restart the session or prepend for that shell:
 - PowerShell: `$env:Path = "C:\Program Files\nodejs;$env:Path"`
 - Bash tool: `export PATH="/c/Program Files/nodejs:$PATH"`
+
+The same stale-environment effect hides other recently-installed CLIs (e.g. `codex` at
+`C:\Users\Admin\AppData\Local\Programs\OpenAI\Codex\bin`, also on the persisted user PATH). Restarting the
+session is the general fix; prepending is the per-shell workaround.
 
 ## PowerShell blocks `npm` / `ng` / `npx`
 

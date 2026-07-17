@@ -23,6 +23,32 @@ Every endpoint requires a valid Bearer token except `AuthController.Login`. `Pro
 `POST /api/auth/reset-password` (`[Authorize(Roles = "Admin")]` → 403 for non-Admins), all of which carry
 `[Authorize]` and fall under the global policy).
 
+### Authenticated == trusted operator (recorded decision, 2026-07-16)
+
+**Authentication is the security boundary; roles are not.** The `FallbackPolicy` requires only
+`RequireAuthenticatedUser()`, so **any** signed-in account can call **any** endpoint that does not carry an
+explicit `[Authorize(Roles = ...)]` — including all Course / Partner / CourseGroup / PublishStatus /
+FeaturedPromoItem writes, and **AppUser + AppRole create/update/delete**. `AppUser.PermissionLevel` is a
+data column only and drives no authorization anywhere.
+
+This was reviewed on 2026-07-16 (Claude audit + independent Codex verification) and **accepted as intended**:
+this is an internal CMS where every account is a trusted operator. Do not "fix" it by sprinkling role
+attributes without revisiting this decision.
+
+Two consequences to keep in mind rather than rediscover:
+
+- **The three `[Authorize(Roles = "Admin")]` endpoints are the exception, not the rule.** Only
+  `AuthController.ResetPassword` and `AppUsersController.AssignRole` / `RemoveRole` are role-gated. The
+  frontend additionally hides the `系統管理 Admin` nav group on `isAdmin()` (`app.ts`), which is a **UI
+  convenience, not a boundary** — those endpoints are reachable directly by any authenticated caller.
+- **Residual availability risk.** `PUT /api/app-users` writes caller-supplied `IsActive`
+  (`AppUserRepository.UpdateAsync`), and login requires `IsActive = 1` (`AuthRepository`). So any operator
+  can deactivate any account, including every Admin. It is recoverable — issued JWTs stay valid for 24h and
+  are never re-checked against `IsActive` — so an Admin holding a live token can re-enable. Accepted under
+  the trusted-operator model; it would be a real vulnerability the moment untrusted accounts exist.
+
+**If this app ever gains non-operator accounts, this section is the thing to revisit first.**
+
 **Consequence for tests:** a plain `_factory.CreateClient()` gets **401** on any feature endpoint. New
 controller tests must use **`_factory.CreateAuthenticatedClient()`** (or `CreateToken(...)`), the helpers
 on `CmsApiFactory` that mint a real signed token — **a bare token defaults to the `Admin` role**, so to
