@@ -143,6 +143,12 @@
   &:hover {
     text-decoration: underline;
   }
+
+  /* Destructive actions must not read as safe ones. red-600, not red-500:
+     red-500 is 3.76:1 on white and fails AA at this size. */
+  &.danger {
+    color: var(--p-red-600);
+  }
 }
 
 .w-full {

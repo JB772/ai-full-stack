@@ -79,7 +79,7 @@
             <span class="slot-links">
               <a class="link" (click)="startEdit(day, slot, item)">Edit</a>
               <a class="link" (click)="copy(item)">Copy</a>
-              <a class="link" (click)="confirmDelete(item)">Delete</a>
+              <a class="link danger" (click)="confirmDelete(item)">Delete</a>
             </span>
             <span class="cell promo">{{ item.promotion?.promoCode }}</span>
             <span class="cell topic">{{ item.topic }}</span>
