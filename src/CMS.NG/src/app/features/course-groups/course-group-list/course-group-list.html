@@ -58,21 +58,21 @@
               severity="secondary"
               [text]="true"
               pTooltip="檢視"
-              [attr.aria-label]="'檢視 ' + group.description"
+              [ariaLabel]="'檢視 ' + group.description"
               (onClick)="view(group)" />
             <p-button
               icon="pi pi-pencil"
               severity="info"
               [text]="true"
               pTooltip="編輯"
-              [attr.aria-label]="'編輯 ' + group.description"
+              [ariaLabel]="'編輯 ' + group.description"
               (onClick)="edit(group)" />
             <p-button
               icon="pi pi-trash"
               severity="danger"
               [text]="true"
               pTooltip="刪除"
-              [attr.aria-label]="'刪除 ' + group.description"
+              [ariaLabel]="'刪除 ' + group.description"
               (onClick)="confirmDelete(group)" />
           </div>
         </td>

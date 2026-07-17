@@ -70,21 +70,21 @@
               severity="secondary"
               [text]="true"
               pTooltip="檢視"
-              [attr.aria-label]="'檢視 ' + partner.name"
+              [ariaLabel]="'檢視 ' + partner.name"
               (onClick)="view(partner)" />
             <p-button
               icon="pi pi-pencil"
               severity="info"
               [text]="true"
               pTooltip="編輯"
-              [attr.aria-label]="'編輯 ' + partner.name"
+              [ariaLabel]="'編輯 ' + partner.name"
               (onClick)="edit(partner)" />
             <p-button
               icon="pi pi-trash"
               severity="danger"
               [text]="true"
               pTooltip="刪除"
-              [attr.aria-label]="'刪除 ' + partner.name"
+              [ariaLabel]="'刪除 ' + partner.name"
               (onClick)="confirmDelete(partner)" />
           </div>
         </td>

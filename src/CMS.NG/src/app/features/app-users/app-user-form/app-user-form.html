@@ -69,7 +69,7 @@
             size="small"
             [disabled]="savingRole()"
             (onClick)="confirmRemoveRole(role)"
-            [attr.aria-label]="'移除角色 ' + role.roleId" />
+            [ariaLabel]="'移除角色 ' + role.roleId" />
         </span>
       } @empty {
         <span class="roles-empty">尚未指派任何角色。</span>

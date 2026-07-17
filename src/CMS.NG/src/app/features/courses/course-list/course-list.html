@@ -267,21 +267,21 @@
               severity="secondary"
               [text]="true"
               pTooltip="檢視"
-              [attr.aria-label]="'檢視 ' + course.title"
+              [ariaLabel]="'檢視 ' + course.title"
               (onClick)="view(course)" />
             <p-button
               icon="pi pi-pencil"
               severity="info"
               [text]="true"
               pTooltip="編輯"
-              [attr.aria-label]="'編輯 ' + course.title"
+              [ariaLabel]="'編輯 ' + course.title"
               (onClick)="edit(course)" />
             <p-button
               icon="pi pi-trash"
               severity="danger"
               [text]="true"
               pTooltip="刪除"
-              [attr.aria-label]="'刪除 ' + course.title"
+              [ariaLabel]="'刪除 ' + course.title"
               (onClick)="confirmDelete(course)" />
           </div>
         </td>
