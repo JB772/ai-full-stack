@@ -13,6 +13,17 @@ body {
   box-sizing: border-box;
 }
 
+/* Form controls don't inherit font-family, so buttons fell back to Arial.
+   Arial carries no CJK glyphs, so Chinese in the nav resolved to a different
+   face than Chinese in the content. font-family only: the `font` shorthand
+   would also reset PrimeNG's size and weight. */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
 /* Shared page chrome used by every feature page. */
 .page-toolbar {
   display: flex;
