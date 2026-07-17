@@ -61,6 +61,41 @@ describe('Login', () => {
     expect(navigateByUrl).toHaveBeenCalledWith('/');
   });
 
+  // Regression: ISSUE-001 — submitting the empty form marked the controls touched but
+  // rendered no message, so the user got silence. Found by /qa on 2026-07-17.
+  // Report: .gstack/qa-reports/qa-report-localhost-4200-2026-07-17.md
+  it('shows a required-field error for each empty control on submit, and posts nothing', () => {
+    const fixture = TestBed.createComponent(Login);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    (el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    fixture.detectChanges();
+
+    const errors = Array.from(el.querySelectorAll('.field-error')).map(e => e.textContent?.trim());
+    expect(errors).toEqual(['帳號為必填。', '密碼為必填。']);
+    httpMock.expectNone(loginUrl);
+  });
+
+  it('clears the required-field error once the control is filled', () => {
+    const fixture = TestBed.createComponent(Login);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    (el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    fixture.detectChanges();
+    expect(el.querySelectorAll('.field-error').length).toBe(2);
+
+    const userId = el.querySelector('#userId') as HTMLInputElement;
+    userId.value = 'admin';
+    userId.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    const errors = Array.from(el.querySelectorAll('.field-error')).map(e => e.textContent?.trim());
+    expect(errors).toEqual(['密碼為必填。']);
+    httpMock.expectNone(loginUrl);
+  });
+
   it('shows an error and does not navigate when login fails', () => {
     const fixture = TestBed.createComponent(Login);
     const router = TestBed.inject(Router);

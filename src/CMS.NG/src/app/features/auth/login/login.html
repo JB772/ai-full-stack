@@ -10,6 +10,9 @@
     <div class="field">
       <label for="userId">帳號 User ID</label>
       <input id="userId" type="text" pInputText formControlName="userId" autocomplete="username" />
+      @if (isInvalid('userId')) {
+        <div class="field-error">帳號為必填。</div>
+      }
     </div>
 
     <div class="field">
@@ -20,6 +23,9 @@
         pInputText
         formControlName="password"
         autocomplete="current-password" />
+      @if (isInvalid('password')) {
+        <div class="field-error">密碼為必填。</div>
+      }
     </div>
 
     <p-button

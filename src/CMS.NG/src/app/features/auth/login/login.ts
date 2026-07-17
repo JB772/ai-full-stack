@@ -24,6 +24,11 @@ export class Login {
     password: ['', Validators.required]
   });
 
+  protected isInvalid(control: 'userId' | 'password'): boolean {
+    const c = this.form.controls[control];
+    return c.invalid && (c.dirty || c.touched);
+  }
+
   protected submit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
