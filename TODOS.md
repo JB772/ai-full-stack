@@ -374,9 +374,11 @@ retire-the-worktree half of the fix below was **not** done.
 
 ## P3 — Deferred by the 2026-07-17 /design-review run
 
-Nine findings were fixed on `develop` (`396a404`..`42a3890`); these were deliberately left. Full report
-and screenshots: `~/.gstack/projects/JB772-ai-full-stack/designs/design-audit-20260717/` (machine-local —
-the findings are restated here so a fresh clone isn't chasing a path it can't reach).
+Ten findings were fixed on `develop` (`396a404`..`51be932` — nine in the audit pass, plus item (a) below,
+which was filed here as deferred and then fixed on request in the same session). The rest were
+deliberately left. Full report and screenshots:
+`~/.gstack/projects/JB772-ai-full-stack/designs/design-audit-20260717/` (machine-local — the findings are
+restated here so a fresh clone isn't chasing a path it can't reach).
 
 ### ~~a) `--p-red-500` fails WCAG AA and is the house error colour~~ — FIXED 2026-07-17
 
