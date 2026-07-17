@@ -46,7 +46,10 @@
       </dd>
 
       <dt>密碼更新時間</dt>
-      <dd>{{ u.passwordUpdatedTime ? (u.passwordUpdatedTime + 'Z' | date: 'yyyy-MM-dd HH:mm') : '—' }}</dd>
+      <!-- No 'Z': PasswordUpdatedTime is written with SYSDATETIME() (server LOCAL time) and serialises
+           offset-less, so it must be read as local. Appending 'Z' makes DatePipe treat it as UTC and
+           re-render it in the browser zone — +8h for UTC+8. Matches row-audit-badge.html. -->
+      <dd>{{ u.passwordUpdatedTime ? (u.passwordUpdatedTime | date: 'yyyy-MM-dd HH:mm') : '—' }}</dd>
 
       <dt>角色數</dt>
       <dd>{{ u.roleCount }}</dd>
