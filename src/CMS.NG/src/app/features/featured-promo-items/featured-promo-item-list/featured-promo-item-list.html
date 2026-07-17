@@ -28,7 +28,16 @@
 </div>
 
 <!-- Weekly grid -->
-<div class="scheduler" [class.loading]="loading()">
+<div class="scheduler" [class.loading]="loading()" role="table" [attr.aria-label]="'每週精選促銷排程 ' + weekLabel()">
+  <div class="grid-header" role="row">
+    <span class="slot-no" role="columnheader">#</span>
+    <span class="slot-move" aria-hidden="true"></span>
+    <span class="slot-links" role="columnheader">操作 Actions</span>
+    <span class="cell promo" role="columnheader">促銷代碼 PromoCode</span>
+    <span class="cell topic" role="columnheader">標題 Topic</span>
+    <span class="cell desc" role="columnheader">說明 Description</span>
+  </div>
+
   @for (day of days(); track toIsoDate(day)) {
     <div class="day-block">
       <div class="day-header">{{ dayLabel(day) }}</div>
@@ -85,7 +94,9 @@
             <span class="cell topic">{{ item.topic }}</span>
             <span class="cell desc">{{ item.description }}</span>
           } @else {
-            <!-- Empty slot -->
+            <!-- Empty slot. The empty .slot-move is a spacer: without it the
+                 data columns would sit 149px left of the populated rows. -->
+            <span class="slot-move" aria-hidden="true"></span>
             <span class="slot-links">
               <a class="link" (click)="startEdit(day, slot)">Edit</a>
               @if (clipboard()) {
