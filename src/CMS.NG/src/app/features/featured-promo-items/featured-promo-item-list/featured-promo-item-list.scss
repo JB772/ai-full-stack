@@ -99,20 +99,32 @@
   gap: 0.5rem;
 }
 
+/* Populated cells are static text, so they must not imitate a text input.
+   Columns are held apart by the flex basis below, not by borders. */
 .cell {
-  border: 1px solid var(--p-content-border-color);
-  border-radius: 4px;
   padding: 0.3rem 0.5rem;
-  background: var(--p-content-background);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 
-  &.promo { flex: 0 0 18rem; }
+  &.promo {
+    flex: 0 0 18rem;
+    font-variant-numeric: tabular-nums;
+  }
   &.topic { flex: 0 0 20rem; }
-  &.desc { flex: 1 1 auto; min-width: 12rem; }
+  &.desc {
+    flex: 1 1 auto;
+    min-width: 12rem;
+    color: var(--p-text-muted-color);
+  }
 
-  &.empty-box { min-height: 1.9rem; }
+  /* An empty slot is the one cell that IS an affordance: it's waiting to be
+     filled. Dashed, so it reads as a placeholder rather than an input. */
+  &.empty-box {
+    min-height: 1.9rem;
+    border: 1px dashed var(--p-content-border-color);
+    border-radius: 4px;
+  }
 }
 
 /* Inline edit form */
