@@ -82,6 +82,17 @@ using var tx = conn.BeginTransaction();
 - `AppUserRepository.CreateAsync` reads the `SysConfig` default password **before** `BeginTransaction`, so
   every command on the connection honours the transaction (SQL Server rejects a non-transactional command on
   a connection with a pending local transaction).
+- `AuthRepository`'s three `AppUser` writes — `UpdateUserNameAsync`, `UpdatePasswordAsync`,
+  `ResetPasswordToDefaultAsync` — are audited too (retrofitted 2026-07-17; they were the one gap). Two things
+  make them worth reading before touching:
+  - **They audit the `AppUser` response model, which has no `PasswordHash` property.** That is deliberate and
+    load-bearing: `LogUpdateAsync`'s ActionDesc is the list of changed *column names*, so a password change
+    audits as `PasswordUpdatedTime` and the hash can never reach `dbo.RowAudit` — a table any authenticated
+    user can read via `GET /api/rowaudit`. Do not "improve" the projection by adding `PasswordHash` to it.
+  - `ResetPasswordToDefaultAsync` reads the `SysConfig` default password **inside** the transaction and so
+    passes `tx` down to `GetDefaultPasswordAsync`. That is the other way round the trap noted above —
+    `AppUserRepository.CreateAsync` reads it *before* `BeginTransaction`; either is fine, but a
+    non-transactional read on a connection with a pending transaction is not.
 - **Not audited:** the lookup-only `TrainingCenter` / `Promotion` repos (no writes), and
   `FeaturedPromoItem.MoveAsync` (a two-row positional swap, not an Insert/Update/Delete).
 
