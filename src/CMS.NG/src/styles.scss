@@ -73,8 +73,10 @@ textarea {
   font-weight: 700;
 }
 
+/* red-600, not red-500, everywhere red carries meaning as text: red-500 (#ef4444)
+   is 3.76:1 on white and fails WCAG AA. red-600 (#dc2626) is 4.83:1. */
 .required-mark {
-  color: var(--p-red-500);
+  color: var(--p-red-600);
   margin-left: 0.25rem;
 }
 
@@ -89,7 +91,7 @@ textarea {
   }
 
   .field-error {
-    color: var(--p-red-500);
+    color: var(--p-red-600);
     font-size: 0.8rem;
     margin-top: 0.25rem;
   }
