@@ -1,9 +1,18 @@
 using CMS.API.Models;
 using CMS.API.Repositories;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CMS.API.Controllers;
 
+/// <summary>
+/// 發布狀態 (PublishStatus) —— 「寫入」僅限 Admin，「讀取」開放給所有登入者。
+///
+/// 為什麼不是整個控制器都擋 Admin：發布狀態的「維護頁」屬於「系統管理 Admin」導覽群組，但它的「清單」是
+/// 課程表單的 FK 下拉選項來源 —— course-form.ts 會呼叫 PublishStatusService.getAll()，也就是
+/// GET /api/publish-statuses。把讀取一起擋掉，非 Admin 就無法新增/修改課程了。
+/// 因此界線畫在動作層級：管理是 Admin 的事，資料本身全站可讀。
+/// </summary>
 [ApiController]
 [Route("api/publish-statuses")]
 [Produces("application/json")]
@@ -36,8 +45,9 @@ public class PublishStatusesController(IPublishStatusRepository repository) : Co
         return status is null ? NotFound() : Ok(status);
     }
 
-    /// <summary>新增發布狀態 (主代碼由使用者指定，重複時回傳 409)。</summary>
+    /// <summary>新增發布狀態 (主代碼由使用者指定，重複時回傳 409)。僅限 Admin。</summary>
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(PublishStatus), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -54,8 +64,9 @@ public class PublishStatusesController(IPublishStatusRepository repository) : Co
         return CreatedAtAction(nameof(GetByPkid), new { id = (int)pkid }, created);
     }
 
-    /// <summary>修改發布狀態 (主代碼由 body 傳入，且不可修改)。</summary>
+    /// <summary>修改發布狀態 (主代碼由 body 傳入，且不可修改)。僅限 Admin。</summary>
     [HttpPut]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -73,8 +84,9 @@ public class PublishStatusesController(IPublishStatusRepository repository) : Co
         return NoContent();
     }
 
-    /// <summary>刪除發布狀態 (仍被課程或促銷活動引用時回傳 409)。</summary>
+    /// <summary>刪除發布狀態 (仍被課程或促銷活動引用時回傳 409)。僅限 Admin。</summary>
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]

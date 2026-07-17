@@ -23,31 +23,42 @@ Every endpoint requires a valid Bearer token except `AuthController.Login`. `Pro
 `POST /api/auth/reset-password` (`[Authorize(Roles = "Admin")]` → 403 for non-Admins), all of which carry
 `[Authorize]` and fall under the global policy).
 
-### Authenticated == trusted operator (recorded decision, 2026-07-16)
+### The Admin boundary
 
-**Authentication is the security boundary; roles are not.** The `FallbackPolicy` requires only
-`RequireAuthenticatedUser()`, so **any** signed-in account can call **any** endpoint that does not carry an
-explicit `[Authorize(Roles = ...)]` — including all Course / Partner / CourseGroup / PublishStatus /
-FeaturedPromoItem writes, and **AppUser + AppRole create/update/delete**. `AppUser.PermissionLevel` is a
-data column only and drives no authorization anywhere.
+**Roles are a real boundary, enforced server-side.** The「系統管理 Admin」nav group in `app.ts` is this app's
+statement of which pages belong to Admins, and the API matches it:
 
-This was reviewed on 2026-07-16 (Claude audit + independent Codex verification) and **accepted as intended**:
-this is an internal CMS where every account is a trusted operator. Do not "fix" it by sprinkling role
-attributes without revisiting this decision.
+| Surface | Rule |
+|---|---|
+| `AppRolesController` | `[Authorize(Roles = "Admin")]` at **class** level — all verbs |
+| `AppUsersController` | `[Authorize(Roles = "Admin")]` at **class** level — all verbs, incl. role assign/remove |
+| `PublishStatusesController` | **writes only** (`POST` / `PUT` / `DELETE`) |
+| `AuthController.ResetPassword` | `[Authorize(Roles = "Admin")]` |
+| Everything else | any authenticated account — Course / Partner / CourseGroup / FeaturedPromoItem / Lookups / RowAudit / profile |
 
-Two consequences to keep in mind rather than rediscover:
+**Why PublishStatus is asymmetric.** Its *maintenance page* is Admin-only, but its *list* is the FK dropdown
+source for the course form — `course-form.ts` calls `PublishStatusService.getAll()`, i.e.
+`GET /api/publish-statuses`. Gate the reads and a non-Admin can no longer create or edit a course. So the
+boundary sits on the write actions: managing statuses is an Admin job, reading them is app-wide.
+`AdminAuthorizationTests` pins both halves, including that read staying open.
 
-- **The three `[Authorize(Roles = "Admin")]` endpoints are the exception, not the rule.** Only
-  `AuthController.ResetPassword` and `AppUsersController.AssignRole` / `RemoveRole` are role-gated. The
-  frontend additionally hides the `系統管理 Admin` nav group on `isAdmin()` (`app.ts`), which is a **UI
-  convenience, not a boundary** — those endpoints are reachable directly by any authenticated caller.
-- **Residual availability risk.** `PUT /api/app-users` writes caller-supplied `IsActive`
-  (`AppUserRepository.UpdateAsync`), and login requires `IsActive = 1` (`AuthRepository`). So any operator
-  can deactivate any account, including every Admin. It is recoverable — issued JWTs stay valid for 24h and
-  are never re-checked against `IsActive` — so an Admin holding a live token can re-enable. Accepted under
-  the trusted-operator model; it would be a real vulnerability the moment untrusted accounts exist.
+**Three layers, one boundary.** `[Authorize(Roles = "Admin")]` is the boundary. `adminGuard`
+(`features/auth/admin.guard.ts`, a pathless `canActivateChild` parent over the admin subtree in
+`app.routes.ts`) is **usability** — it keeps non-Admins off a screen that would 403 on every request. Nav
+hiding (`app.ts`) is **cosmetic**. Only the first one stops a direct API call.
 
-**If this app ever gains non-operator accounts, this section is the thing to revisit first.**
+> **History — why this is stated so emphatically.** A 2026-07-16 review recorded the opposite decision
+> ("authenticated == trusted operator; roles are not a boundary") and it was **reversed on 2026-07-17** after
+> a real report: a newly created account with no Admin role could open the 角色 AppRole page. Three layers
+> were wrong at once — `/` and `**` redirected *everyone* to `/app-roles`, no route guard existed, and these
+> controllers had no role attribute. The nav hiding was decoration around a page users were landing on by
+> default. `AppUser.PermissionLevel` remains a data column and still drives no authorization; `Admin` is a
+> role in `AppUserRole`, matched exactly.
+>
+> That reversal also closed a real escalation: `AppUserRequest` carries `IsActive` and login requires
+> `IsActive = 1`, so the ungated `PUT /api/app-users` let any signed-in account deactivate every
+> administrator (recoverable only because issued JWTs stay valid 24h and are never re-checked against
+> `IsActive` — see the token-revocation gap below).
 
 **Consequence for tests:** a plain `_factory.CreateClient()` gets **401** on any feature endpoint. New
 controller tests must use **`_factory.CreateAuthenticatedClient()`** (or `CreateToken(...)`), the helpers

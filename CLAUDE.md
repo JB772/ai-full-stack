@@ -47,10 +47,10 @@ Chrome, UTF-8 curl) → **`docs/environment.md`**.
   errors flow only through `authInterceptor` → `docs/exception-handling.md`.
 - **Auth is global** — only login is anonymous; tests use `CreateAuthenticatedClient()`; frontend
   specs seed `auth-profile` in session storage first → `docs/auth.md`.
-- **Authenticated == trusted operator** — authentication is the boundary, roles are **not**. Any
-  signed-in account can call anything without an explicit `[Authorize(Roles = ...)]` (only 3 endpoints
-  have one). Reviewed and accepted 2026-07-16 — don't add role gates without reading
-  `docs/auth.md` § "Authenticated == trusted operator" first.
+- **The「系統管理 Admin」nav group is Admin-only, enforced server-side** — `AppRoles` + `AppUsers` are
+  `[Authorize(Roles = "Admin")]` at class level; `PublishStatuses` gates **writes only** (its list feeds the
+  course form's FK dropdown). `adminGuard` on the route subtree is usability; nav hiding is cosmetic. Only
+  the attribute is the boundary → `docs/auth.md` § "The Admin boundary".
 - **`nchar(n)` columns need `RTRIM()`** in every SELECT.
 - **`/crud` skill layout is wrong for this repo** (assumes `core/` + `AuditHelper`) — follow the code.
 - **PrimeNG major tracks Angular's** (20 → 20); `primeng@latest` pulls v21 and fails peer resolution.

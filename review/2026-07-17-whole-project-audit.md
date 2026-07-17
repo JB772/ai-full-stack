@@ -22,17 +22,24 @@ the cited code. Nothing is taken on a subagent's word.
 
 ## Findings summary
 
-**52 findings — 14 Critical, 38 Minor. 15 fixed, 30 open, 7 closed by decision.**
+**53 findings — 15 Critical, 38 Minor. 18 fixed, 30 open, 5 closed by decision.**
 
 | | Critical | Minor | Total |
 |---|---|---|---|
-| **Fixed this session** | 8 | 7 | **15** |
-| **Closed by decision** (deferred / by design / accepted / no action) | 5 | 2 | **7** |
+| **Fixed** | 11 | 7 | **18** |
+| **Closed by decision** (deferred / accepted / by design / no action) | 3 | 2 | **5** |
 | **Open** | 1 | 29 | **30** |
-| **Total** | **14** | **38** | **52** |
+| **Total** | **15** | **38** | **53** |
 
-**Still-open Critical: `SEC-06` only** — and it is already folded into the deferred `SEC-01` password
-migration, so no Critical remains that isn't covered by a recorded decision.
+**Still-open Critical: `SEC-06` only** — already folded into the deferred `SEC-01` password migration.
+
+> **`SEC-02` was reversed on 2026-07-17.** It was recorded here as "by design — authenticated == trusted
+> operator" and committed to `docs/auth.md` + `CLAUDE.md`. A real report then landed: a newly created account
+> with no Admin role could open the 角色 AppRole page. That surfaced `SEC-09` — `/` and `**` both redirected
+> *everyone* to `/app-roles`, so the nav hiding was decoration around a page users were sent to by default.
+> `SEC-02`, `SEC-03` and `SEC-09` are now fixed and the docs are reversed. The lesson worth keeping: the
+> abstract decision ("roles aren't a boundary") did not survive contact with the concrete behaviour, and the
+> three pre-existing selective Admin gates were evidence of the real intent all along.
 
 **The headline: the documentation was lying about the thing it most needed to be right about.**
 `docs/schema-and-testing.md` stated *"RowAudit is not wired up… none of these exist in the code."* In reality
@@ -62,8 +69,9 @@ Conf = confidence /10 (10 = demonstrated; 7-8 = verified pattern match).
 | ID | Finding | Priority | Severity | Conf | Area | Fix status | Fix notes |
 |---|---|---|---|---|---|---|---|
 | SEC-01 | `PasswordHasher.cs:14` — passwords hashed with one unsalted round of SHA-256; compared inside a SQL `WHERE` | P1 | Critical | 10 | Security | **Deferred** | Decision 2026-07-17: report only. P1 TODO with opportunistic re-hash-on-login migration. Forces comparison out of SQL into constant-time app code. |
-| SEC-02 | `Program.cs:111` — `FallbackPolicy` requires only an authenticated user; `[Authorize(Roles)]` on just 3 endpoints, so any account can call user/role/content mutations | — | Critical | 9 | Security | **By design** | Decision 2026-07-17: authenticated == trusted operator. Documented in `docs/auth.md` § + CLAUDE.md hard rule, with the revisit trigger. |
-| SEC-03 | `AppUserRequest.IsActive` writable via ungated `PUT /api/app-users`; login requires `IsActive=1`, so any operator can deactivate any Admin | — | Critical | 9 | Security | **Accepted** | Residual of SEC-02. Recoverable — Codex correction: live JWTs stay valid 24h and are never re-checked. Recorded in `docs/auth.md`. |
+| SEC-02 | `Program.cs:111` — `FallbackPolicy` requires only an authenticated user; `[Authorize(Roles)]` on just 3 endpoints, so any account can call user/role/content mutations | P1 | Critical | 9 | Security | **✅ Fixed** | **Decision reversed 2026-07-17** (was "by design") after a real report: a new non-Admin could open 角色 AppRole. Class-level `[Authorize(Roles="Admin")]` on AppRoles + AppUsers; PublishStatus **writes only** (its list feeds course-form's FK dropdown). Scope taken from the app's own「系統管理 Admin」nav group. +24 endpoint tests; negative-controlled. Docs reversed. |
+| SEC-03 | `AppUserRequest.IsActive` writable via ungated `PUT /api/app-users`; login requires `IsActive=1`, so any operator can deactivate any Admin | P1 | Critical | 9 | Security | **✅ Fixed** | Closed by SEC-02's class-level gate. Pinned by a test asserting a non-Admin gets 403 and the Admin stays `IsActive`. |
+| SEC-09 | `app.routes.ts` — `/` **and** `**` both redirected to `app-roles`, so every account landed on the Admin page on login (`login.ts:37` → `navigateByUrl('/')`); no admin route guard existed anywhere | P1 | Critical | 10 | Frontend | **✅ Fixed** | The actual reported symptom, and the reason nav hiding never helped — users were *sent* to the page the sidebar hid. Landing → `featured-promo-items` (the 首頁 Home item); new `adminGuard` as a pathless `canActivateChild` over the admin subtree, so a 13th admin route can't miss it. +4 guard specs. |
 | SEC-04 | `Program.cs:118` — `app.UseSwagger()` unconditional; middleware runs before endpoint authz, so API inventory is anonymously readable wherever deployed | P2 | Minor | 9 | Security | **Open** | *(Codex)* Wrap in `IsDevelopment()`. Moot if localhost/LAN-only — CLAUDE.md documents Swagger as the dev entry point. |
 | SEC-05 | Deactivation / password change / role removal do **not** revoke live JWTs (24h, roles baked in at `JwtTokenService.cs:31`, no re-check) | P2 | Minor | 8 | Security | **Open** | *(Codex)* Shorten lifetime + refresh token, or re-check a security stamp in `OnTokenValidated`. |
 | SEC-06 | Every account created **or** reset gets the same default password (`AppUserRepository.cs:79`, `AuthRepository.cs:112`); login never reads `PasswordUpdatedTime`, so no forced first change | P1 | Critical | 9 | Security | **Open** | *(Codex)* Compounds SEC-01 — unsalted means all such accounts share one identical hash. Folded into the SEC-01 P1 TODO. |

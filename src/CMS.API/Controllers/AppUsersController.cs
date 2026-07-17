@@ -5,9 +5,17 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CMS.API.Controllers;
 
+/// <summary>
+/// 使用者 (AppUser) 維護 —— 全控制器僅限 Admin (含帳號的建立/修改/刪除與角色指派)。
+///
+/// 屬於 app.ts「系統管理 Admin」導覽群組。在加上這個類別層級屬性之前，只有角色指派/移除兩個動作被擋，
+/// 帳號的 Create/Update/Delete 則否 —— 而 AppUserRequest 帶有 IsActive、登入又要求 IsActive = 1，
+/// 等於任何登入者都能停用任何管理員帳號。詳見 docs/auth.md。
+/// </summary>
 [ApiController]
 [Route("api/app-users")]
 [Produces("application/json")]
+[Authorize(Roles = "Admin")]
 public class AppUsersController(IAppUserRepository repository) : ControllerBase
 {
     /// <summary>取得所有使用者。</summary>
@@ -109,9 +117,8 @@ public class AppUsersController(IAppUserRepository repository) : ControllerBase
         return Ok(await repository.GetRolesAsync(id));
     }
 
-    /// <summary>指派角色給使用者 (僅限 Admin)。回傳更新後的角色清單。</summary>
+    /// <summary>指派角色給使用者 (僅限 Admin —— 由類別層級的 [Authorize] 涵蓋)。回傳更新後的角色清單。</summary>
     [HttpPost("{id:int}/roles")]
-    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(IEnumerable<UserRole>), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -145,9 +152,8 @@ public class AppUsersController(IAppUserRepository repository) : ControllerBase
         return CreatedAtAction(nameof(GetRoles), new { id }, roles);
     }
 
-    /// <summary>移除使用者的角色 (僅限 Admin)。</summary>
+    /// <summary>移除使用者的角色 (僅限 Admin —— 由類別層級的 [Authorize] 涵蓋)。</summary>
     [HttpDelete("{id:int}/roles/{roleId}")]
-    [Authorize(Roles = "Admin")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveRole(int id, string roleId)
