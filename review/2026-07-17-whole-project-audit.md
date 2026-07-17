@@ -22,16 +22,19 @@ the cited code. Nothing is taken on a subagent's word.
 
 ## Findings summary
 
-**53 findings — 15 Critical, 38 Minor. 18 fixed, 30 open, 5 closed by decision.**
+**53 findings — 16 Critical, 37 Minor. 18 fixed, 30 open, 5 closed by decision.**
 
 | | Critical | Minor | Total |
 |---|---|---|---|
 | **Fixed** | 11 | 7 | **18** |
 | **Closed by decision** (deferred / accepted / by design / no action) | 3 | 2 | **5** |
-| **Open** | 1 | 29 | **30** |
-| **Total** | **15** | **38** | **53** |
+| **Open** | 2 | 28 | **30** |
+| **Total** | **16** | **37** | **53** |
 
-**Still-open Critical: `SEC-06` only** — already folded into the deferred `SEC-01` password migration.
+**Still-open Criticals: `SEC-05` · `SEC-06`.** `SEC-06` is folded into the deferred `SEC-01`. **`SEC-05` is
+new to this list** — it sat at Minor only because roles were not a boundary, and the `SEC-02` reversal
+promoted it: revoking Admin now takes up to 24h to take effect, which is the ceiling on the gate we just
+built. Recommended next.
 
 > **`SEC-02` was reversed on 2026-07-17.** It was recorded here as "by design — authenticated == trusted
 > operator" and committed to `docs/auth.md` + `CLAUDE.md`. A real report then landed: a newly created account
@@ -41,16 +44,30 @@ the cited code. Nothing is taken on a subagent's word.
 > abstract decision ("roles aren't a boundary") did not survive contact with the concrete behaviour, and the
 > three pre-existing selective Admin gates were evidence of the real intent all along.
 
-**The headline: the documentation was lying about the thing it most needed to be right about.**
+**Two headlines, and the second one only arrived because a human used the app.**
+
+**1 — The documentation was lying about the thing it most needed to be right about.**
 `docs/schema-and-testing.md` stated *"RowAudit is not wired up… none of these exist in the code."* In reality
 `RowAuditWriter` exists, 7 repositories inject it, 12 pages carry the badge, and CLAUDE.md lists auditing as a
 hard rule. A future session scaffolding a table would have read that and correctly skipped audit. **Fixed.**
 
+**2 — The audit reasoned about authorization in the abstract and got it wrong.** It found the gap
+(`SEC-02`), presented it as a decision, and recorded the answer — "authenticated == trusted operator" —
+without ever asking what a non-Admin actually *sees* on login. The answer was: the Admin page, because `/`
+redirected there. No amount of reading the controllers surfaced that; one person logging in as a new user
+did. `SEC-09` is the finding the whole seven-specialist fan-out missed, and it is the one that made the
+other two indefensible.
+
 **Cross-model value:** Codex verified 3 of my 4 top claims, **corrected 1** (the admin-lockout is recoverable —
 issued JWTs stay valid 24h and are never re-checked against `IsActive`), and found 4 issues the Claude
-specialists missed entirely (`SEC-04`, `SEC-05`, `SEC-06`, `SEC-07`).
+specialists missed entirely (`SEC-04`, `SEC-05`, `SEC-06`, `SEC-07`). Worth noting against the second
+headline: Codex read the same controllers and also never checked the landing route. Cross-model agreement
+raised confidence in the *findings*; it did nothing for the *framing*, because both models were reading code
+rather than using the app.
 
 **Biggest remaining risk:** `SEC-01` (unsalted SHA-256 password hashing) — deferred to a P1 TODO by decision.
+**Recommended next:** `SEC-05` — the reversal made it Critical, and it caps how much the new Admin gate is
+actually worth.
 **Cheapest remaining fix:** `API-01` (409 message names zero-count children) or `SEC-04` (gate Swagger).
 
 **Verified clean** (negative results worth trusting): the `nchar` RTRIM hard rule is fully satisfied
@@ -73,7 +90,7 @@ Conf = confidence /10 (10 = demonstrated; 7-8 = verified pattern match).
 | SEC-03 | `AppUserRequest.IsActive` writable via ungated `PUT /api/app-users`; login requires `IsActive=1`, so any operator can deactivate any Admin | P1 | Critical | 9 | Security | **✅ Fixed** | Closed by SEC-02's class-level gate. Pinned by a test asserting a non-Admin gets 403 and the Admin stays `IsActive`. |
 | SEC-09 | `app.routes.ts` — `/` **and** `**` both redirected to `app-roles`, so every account landed on the Admin page on login (`login.ts:37` → `navigateByUrl('/')`); no admin route guard existed anywhere | P1 | Critical | 10 | Frontend | **✅ Fixed** | The actual reported symptom, and the reason nav hiding never helped — users were *sent* to the page the sidebar hid. Landing → `featured-promo-items` (the 首頁 Home item); new `adminGuard` as a pathless `canActivateChild` over the admin subtree, so a 13th admin route can't miss it. +4 guard specs. |
 | SEC-04 | `Program.cs:118` — `app.UseSwagger()` unconditional; middleware runs before endpoint authz, so API inventory is anonymously readable wherever deployed | P2 | Minor | 9 | Security | **Open** | *(Codex)* Wrap in `IsDevelopment()`. Moot if localhost/LAN-only — CLAUDE.md documents Swagger as the dev entry point. |
-| SEC-05 | Deactivation / password change / role removal do **not** revoke live JWTs (24h, roles baked in at `JwtTokenService.cs:31`, no re-check) | P2 | Minor | 8 | Security | **Open** | *(Codex)* Shorten lifetime + refresh token, or re-check a security stamp in `OnTokenValidated`. |
+| SEC-05 | Deactivation / password change / role removal do **not** revoke live JWTs (24h, roles baked in at `JwtTokenService.cs:31`; `Program.cs:97` validates signature + lifetime only, no `OnTokenValidated`) | P1 | Critical | 8 | Security | **Open** | *(Codex)* **Severity raised Minor → Critical on 2026-07-17 by the `SEC-02` reversal.** While roles were not a boundary this was cosmetic. Now that they are, it is a way *through* the boundary: revoke someone's Admin role and they stay Admin for up to 24h. Bounded — it needs prior privilege, so it is revocation latency, not escalation — but the new gate is only as strong as this window. Fix: re-check a security stamp in `OnTokenValidated`, or shorten the lifetime + add refresh. |
 | SEC-06 | Every account created **or** reset gets the same default password (`AppUserRepository.cs:79`, `AuthRepository.cs:112`); login never reads `PasswordUpdatedTime`, so no forced first change | P1 | Critical | 9 | Security | **Open** | *(Codex)* Compounds SEC-01 — unsalted means all such accounts share one identical hash. Folded into the SEC-01 P1 TODO. |
 | SEC-07 | No rate limiting, throttling, or account lockout on login (`AddRateLimiter` → no hits) | P2 | Minor | 9 | Security | **Open** | *(Codex)* Compounds SEC-01: the online guessing path is unthrottled too. |
 | SEC-08 | `JwtSigningKeyProvider` caches the signing key for process lifetime (no rotation, no length validation); issuer/audience validation disabled | P3 | Minor | 7 | Security | **Open** | Matters only if the symmetric key is shared with another service. Validate ≥32 bytes at load so a weak key fails fast. |
@@ -124,22 +141,25 @@ Conf = confidence /10 (10 = demonstrated; 7-8 = verified pattern match).
 
 ---
 
-## Fixes applied this session
+## Fixes applied
 
-**Backend — 260 xUnit passing** (258 + 2 new) · **Frontend — 338 Karma passing** · production build clean.
+**Backend — 292 xUnit passing** (258 at audit start, +34) · **Frontend — 344 Karma passing** (335 at start,
++9) · production build clean.
 
-| Area | Change |
-|---|---|
-| `DATA-01/02` | New `src/CMS.API/Models/DeleteResult.cs` (`NotFound`/`Blocked`/`Deleted`) mirroring the existing `MoveResult` convention; `CourseGroupRepository` + `CourseRepository` re-check counts inside their delete transaction; both controllers map `Blocked`→409; both in-memory fakes updated to mirror the contract; 2 race-simulating tests via a new `OnBeforeDeleteGuard` seam. |
-| `TEST-01` | Uniform 6-digit synthetic fixtures + rationale comment; negative-controlled across all 11 numeric fields. |
-| `FE-13/14/15` | `console.error` on PDF failure; `p-tag { display: none }` in print; `formatProvenance()` guard. |
-| `TEST-07/08` | `afterEach` sessionStorage cleanup; misleading test renamed. |
-| `DOC-01/02/03/06/07` | The three doc lies corrected; `TODOS.md` pointer fixed; auth posture documented. |
+| IDs | Change | Commit |
+|---|---|---|
+| `SEC-02/03/09` | **The Admin boundary.** Class-level `[Authorize(Roles = "Admin")]` on `AppRoles` + `AppUsers`; `PublishStatus` **writes only** (its list feeds course-form's FK dropdown, so gating reads would break course editing). New `adminGuard` as a pathless `canActivateChild` over the admin subtree. Landing `/` and `**` → `featured-promo-items`. Scope taken from the app's own「系統管理 Admin」nav group. **Reverses the 2026-07-16 "trusted operator" decision** — docs reversed with it. +24 API tests (403 per endpoint, not per controller) +4 guard specs. | `84a5389` |
+| `AUD-01` | **The last unaudited write path.** `AuthRepository` injects `RowAuditWriter`; all three `AppUser` writes run in a transaction with before/after reload + `LogUpdateAsync` on the same conn+tx. Audits the `AppUser` projection (no `PasswordHash` property) so a password change logs `PasswordUpdatedTime` and the hash cannot reach `dbo.RowAudit`. +8 tests against the **real** repository via SQLite, incl. a rollback test. | `3594eea` |
+| `DATA-01/02` | **Silent cascade delete.** New `DeleteResult` (`NotFound`/`Blocked`/`Deleted`) mirroring the existing `MoveResult` convention; both repositories re-check counts inside their delete transaction; controllers map `Blocked`→409; both fakes mirror the contract; +2 race-simulating tests via an `OnBeforeDeleteGuard` seam. | `c1f625f` |
+| `FE-01` | **+8h timezone bug.** Deleted the only two `+ 'Z'` appends in the repo. +2 tests; negative control renders `2026-07-16 22:30` for a 14:30 input. | `f4c3d10` |
+| `TEST-01` | **The vacuous completeness guard.** Uniform 6-digit synthetic fixtures + rationale; negative-controlled across all 11 numeric fields. | `285146f` |
+| `FE-13/14/15`, `TEST-07/08` | `console.error` on PDF failure; `p-tag { display: none }` in print (the 是 是 double-render); `formatProvenance()` empty-user guard; `afterEach` sessionStorage cleanup; misleading test renamed. | `285146f` |
+| `DOC-01/02/03/06/07` | The three doc lies corrected (`RowAudit is not wired up`, ×2 `Node is not on PATH`); `TODOS.md` machine-local pointer fixed; `docs/auth.md` gained the authorization section it never had — **written 2026-07-16, reversed 2026-07-17**. | `78126cd`, `84a5389` |
 
 ### Test-coverage reality — which fixes are actually proven
 
 `CmsApiFactory` swaps **every** repository for an in-memory fake, so **no endpoint test can execute real
-Dapper code**. Proved by negative control: neutralising the *real* delete guards left all 260 tests green;
+Dapper code**. Proved by negative control: neutralising the *real* delete guards left the whole suite green;
 neutralising the *fake's* guard, or the controller's `Blocked` arm, turned exactly one test red.
 
 - **`DATA-01/02` (delete guards)** — endpoint tests cover (a) the fake mirrors the real contract and (b) the
@@ -157,17 +177,37 @@ It is available to any repository whose SQL is portable.
 
 ## Open decisions
 
-1. **`SEC-06`** (the last open Critical) — shared default password + no forced first-login change; already
-   folded into the deferred `SEC-01` P1 migration, so this is really "when do you do `SEC-01`".
-2. **`SEC-04`** — gate Swagger, or confirm localhost/LAN-only.
-3. **`DATA-01/02` coverage** — now that `AuthRepositoryAuditTests` proves the SQLite route works, the delete
+1. **`SEC-05`** — the one the reversal created. Now that roles are the boundary, a 24h stale-token window
+   means revoking Admin does not take effect for a day. The gate is only as strong as this. **Recommend
+   fixing next**; it is the cheapest way to make the new boundary mean what it says.
+2. **`SEC-06`** — shared default password + no forced first-login change; folded into the deferred `SEC-01`
+   P1 migration, so this is really "when do you do `SEC-01`".
+3. **`SEC-04`** — gate Swagger, or confirm localhost/LAN-only.
+4. **`DATA-01/02` coverage** — now that `AuthRepositoryAuditTests` proves the SQLite route works, the delete
    guards could be promoted from "verified by reading" to real tests the same way.
-4. **`TODOS.md` detail level** — same publishing question as this file, resolved the same way: the entries are
-   engineering content, not secrets, and they stay as written.
+
+## What this audit got wrong, and why it matters next time
+
+Worth keeping, because the failure was in method rather than in any individual finding:
+
+- **The fan-out read code; it never used the app.** Seven specialists and an independent Codex pass all read
+  `AppRolesController`, all noticed it had no role attribute, and not one of them asked where a new user
+  lands. `login.ts:37` → `/` → `redirectTo: 'app-roles'` is two hops and would have reframed the entire
+  authorization question. It took one person logging in.
+- **Cross-model agreement validated findings, not framing.** Codex independently confirmed the `SEC-02` facts
+  and even sharpened them. Both models were still reasoning about the same wrong question.
+- **"By design" is a claim about intent, and the code already carried the evidence** — three selective Admin
+  gates, an `isAdmin()` nav filter, and a doc line insisting reset-password was "enforced server-side, not
+  just a hidden button". The audit surfaced those, wrote them down as *dissent*, and still recorded the
+  opposite decision. When the evidence contradicts the decision that clearly, that is the signal to push
+  back harder, not to file it as a footnote.
+- **A reversal cascades.** `SEC-05` sat at Minor purely because roles were not a boundary. Reversing `SEC-02`
+  silently promoted it to Critical. Any decision this structural should trigger a re-read of everything whose
+  severity depended on it.
 
 ## Status
 
 **DONE_WITH_CONCERNS.** The audit found materially more than the branch diff did, confirming the instinct that
-earlier features had gone unreviewed. One Critical remains open — `SEC-06` — and it is already folded into the
-deferred `SEC-01` password migration, so every remaining Critical sits behind a recorded decision rather than
-an oversight. The 29 open Minors are quality/consistency/coverage work.
+earlier features had gone unreviewed — and the `SEC-02` reversal showed the audit itself had a blind spot that
+only real use exposed. Two Criticals remain open: `SEC-05` (created by the reversal — recommend next) and
+`SEC-06` (folded into the deferred `SEC-01`). The 29 open Minors are quality/consistency/coverage work.
