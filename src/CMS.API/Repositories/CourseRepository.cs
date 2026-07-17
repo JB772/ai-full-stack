@@ -225,7 +225,7 @@ public class CourseRepository(IDbConnectionFactory connectionFactory, RowAuditWr
     /// CASCADE, so SQL Server deletes the junction rows instead of rejecting. CoursesController.Delete
     /// checks the counts first — see its 409 guard.
     /// </summary>
-    public async Task<bool> DeleteAsync(int pkid)
+    public async Task<DeleteResult> DeleteAsync(int pkid)
     {
         using var conn = connectionFactory.CreateConnection();
         conn.Open();
@@ -234,14 +234,26 @@ public class CourseRepository(IDbConnectionFactory connectionFactory, RowAuditWr
         var row = await LoadByPkidAsync(conn, pkid, tx);
         if (row is null)
         {
-            return false;
+            return DeleteResult.NotFound;
+        }
+
+        // Re-check inside THIS transaction. The controller's pre-check ran on a different connection, and
+        // CourseInCertification / CourseJobCategories are ON DELETE CASCADE — SQL Server will NOT reject
+        // this DELETE, so junction rows created since that check would be silently destroyed
+        // (docs/delete-guards.md). `row` was loaded above by SelectColumns, whose count subqueries ran in
+        // this transaction, so these are fresh.
+        // Keep this list in step with CoursesController.DescribeBlockers when adding a child table.
+        if (row.CourseFaqCount > 0 || row.CertificationCount > 0 || row.JobCategoryCount > 0
+            || row.RelatedLinkCount > 0 || row.HotCourseCount > 0 || row.RecommCount > 0)
+        {
+            return DeleteResult.Blocked;
         }
 
         await conn.ExecuteAsync("DELETE FROM Course WHERE pkid = @Pkid", new { Pkid = pkid }, tx);
         await auditWriter.LogDeleteAsync(TableName, row, conn, tx);
 
         tx.Commit();
-        return true;
+        return DeleteResult.Deleted;
     }
 
     /// <summary>Loads a row (with nav objects) on an existing open connection/transaction. The audit's

@@ -17,5 +17,9 @@ public interface ICourseGroupRepository
     /// Unguarded. FK_Course_CourseGroup is ON DELETE CASCADE, so SQL Server will delete every course in
     /// the group rather than refusing — the caller MUST check CourseCount / PartnerCourseGroupCount first.
     /// </summary>
-    Task<bool> DeleteAsync(short pkid);
+    /// <summary>
+    /// 刪除課程群組。回傳 <see cref="DeleteResult.Blocked"/> 表示交易內再檢查時仍有子資料
+    /// (控制器的刪除前檢查與此為不同連線，而 FK 是 ON DELETE CASCADE — 見 docs/delete-guards.md)。
+    /// </summary>
+    Task<DeleteResult> DeleteAsync(short pkid);
 }

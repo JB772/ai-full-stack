@@ -110,7 +110,7 @@ public class CourseGroupRepository(IDbConnectionFactory connectionFactory, RowAu
     /// deletes every Course in the group (and, via their own cascades, their CourseInCertification and
     /// CourseJobCategories rows) instead of rejecting. CourseGroupsController.Delete checks the counts first.
     /// </summary>
-    public async Task<bool> DeleteAsync(short pkid)
+    public async Task<DeleteResult> DeleteAsync(short pkid)
     {
         using var conn = connectionFactory.CreateConnection();
         conn.Open();
@@ -119,14 +119,24 @@ public class CourseGroupRepository(IDbConnectionFactory connectionFactory, RowAu
         var row = await LoadByPkidAsync(conn, pkid, tx);
         if (row is null)
         {
-            return false;
+            return DeleteResult.NotFound;
+        }
+
+        // Re-check inside THIS transaction. The controller's pre-check ran on a different connection, and
+        // FK_Course_CourseGroup is ON DELETE CASCADE — SQL Server will NOT reject this DELETE, so a Course
+        // inserted since that check would be silently destroyed (docs/delete-guards.md). `row` was loaded
+        // above by SelectColumns, whose count subqueries ran in this transaction, so these are fresh.
+        // Keep this list in step with CourseGroupsController.DescribeBlockers when adding a child table.
+        if (row.CourseCount > 0 || row.PartnerCourseGroupCount > 0)
+        {
+            return DeleteResult.Blocked;
         }
 
         await conn.ExecuteAsync("DELETE FROM CourseGroup WHERE pkid = @Pkid", new { Pkid = pkid }, tx);
         await auditWriter.LogDeleteAsync(TableName, row, conn, tx);
 
         tx.Commit();
-        return true;
+        return DeleteResult.Deleted;
     }
 
     /// <summary>Loads a row on an existing open connection/transaction (see PublishStatusRepository).</summary>

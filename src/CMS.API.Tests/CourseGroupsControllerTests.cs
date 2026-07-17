@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using CMS.API.Models;
+using CMS.API.Repositories;
+using CMS.API.Tests.Fakes;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CMS.API.Tests;
 
@@ -277,6 +280,39 @@ public class CourseGroupsControllerTests : IDisposable
         var response = await _client.DeleteAsync("/api/course-groups/99");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    /// <summary>
+    /// The TOCTOU case, and the reason the guard is duplicated in the repository. The controller's
+    /// pre-check runs on a different connection than the DELETE, so a Course can land in the window
+    /// between them. FK_Course_CourseGroup is ON DELETE CASCADE, so SQL Server will NOT reject the
+    /// delete — it destroys the new Course silently. Only an in-transaction re-check stops that, and
+    /// only this test reaches it: every other delete test above is answered by the controller
+    /// pre-check and returns before the repository guard ever runs.
+    ///
+    /// SCOPE — read before trusting this test. `CmsApiFactory` swaps in `InMemoryCourseGroupRepository`,
+    /// so this exercises the FAKE's guard plus the controller's `DeleteResult.Blocked` → 409 mapping. It
+    /// does NOT execute `CourseGroupRepository`'s real Dapper guard — no endpoint test in this repo can,
+    /// because the real repository is never resolved. Verified by negative control (2026-07-17): removing
+    /// the real repository's `if` leaves this test green; removing the fake's guard, or the controller's
+    /// Blocked arm, turns it red. The real guard is verified by reading, and the fake's comment tells the
+    /// next person to keep the two in step — that pairing is what this test protects.
+    /// </summary>
+    [Fact]
+    public async Task Delete_WhenACourseAppearsAfterThePreCheck_Returns409AndKeepsTheGroup()
+    {
+        // Group 1 has no children, so the controller's pre-check passes and we reach the repository.
+        var fake = (InMemoryCourseGroupRepository)_factory.Services.GetRequiredService<ICourseGroupRepository>();
+        fake.OnBeforeDeleteGuard = group => group.CourseCount = 1; // a Course lands in the race window
+
+        var response = await _client.DeleteAsync("/api/course-groups/1");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        // The group — and the Course that would have been cascaded away with it — must survive.
+        fake.OnBeforeDeleteGuard = null;
+        var survivor = await _client.GetFromJsonAsync<CourseGroup>("/api/course-groups/1");
+        Assert.Equal("雲端", survivor!.Description);
     }
 
     // ---------- Lookup ----------

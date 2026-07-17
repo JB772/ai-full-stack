@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using CMS.API.Models;
+using CMS.API.Repositories;
+using CMS.API.Tests.Fakes;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CMS.API.Tests;
 
@@ -404,6 +407,35 @@ public class CoursesControllerTests : IDisposable
         var response = await _client.DeleteAsync("/api/courses/99");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    /// <summary>
+    /// The TOCTOU case. The controller's pre-check runs on a different connection than the DELETE, so a
+    /// CourseInCertification row can land in the window between them — and that FK is ON DELETE CASCADE,
+    /// so SQL Server destroys it silently rather than rejecting the delete. Only an in-transaction
+    /// re-check stops that; every other delete test here is answered by the controller pre-check and
+    /// returns before the repository guard runs.
+    ///
+    /// SCOPE: `CmsApiFactory` swaps in `InMemoryCourseRepository`, so this covers the FAKE's guard plus
+    /// the controller's `DeleteResult.Blocked` → 409 mapping — not `CourseRepository`'s real Dapper
+    /// guard, which no endpoint test can reach. See the equivalent test in CourseGroupsControllerTests
+    /// for the negative-control evidence behind that claim.
+    /// </summary>
+    [Fact]
+    public async Task Delete_WhenACertificationAppearsAfterThePreCheck_Returns409AndKeepsTheCourse()
+    {
+        // Course 2 has no children, so the controller's pre-check passes and we reach the repository.
+        var fake = (InMemoryCourseRepository)_factory.Services.GetRequiredService<ICourseRepository>();
+        fake.OnBeforeDeleteGuard = course => course.CertificationCount = 1; // lands in the race window
+
+        var response = await _client.DeleteAsync("/api/courses/2");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        // The course — and the junction row that would have been cascaded away — must survive.
+        fake.OnBeforeDeleteGuard = null;
+        var survivor = await _client.GetFromJsonAsync<Course>("/api/courses/2");
+        Assert.Equal("CCNA 認證課程", survivor!.Title);
     }
 
     [Fact]
