@@ -95,7 +95,10 @@ export class CourseDetail implements OnInit {
     this.savingPdf.set(true);
     try {
       await this.pdfService.download(course, new Date(), this.auth.userName());
-    } catch {
+    } catch (error) {
+      // The toast is deliberately generic; keep the real cause reachable in the console, since a
+      // font 404, a CORS failure and a builder bug are otherwise indistinguishable in the field.
+      console.error('PDF generation failed', error);
       this.messageService.add({ severity: 'error', summary: 'PDF 產生失敗', detail: '無法產生課程資料 PDF。' });
     } finally {
       this.savingPdf.set(false);

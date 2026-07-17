@@ -29,6 +29,16 @@ export function formatGeneratedAt(date: Date): string {
   return `${formatFileStamp(date).replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3')} ${hours}:${minutes}`;
 }
 
+/**
+ * The 產生於 provenance line. `userName` is empty when the session profile is gone (cleared in
+ * another tab, token expiry) — drop the separator rather than trail a dangling `·` with no
+ * attribution behind it.
+ */
+export function formatProvenance(generatedAt: Date, userName: string): string {
+  const stamp = `產生於 ${formatGeneratedAt(generatedAt)}`;
+  return userName ? `${stamp} · ${userName}` : stamp;
+}
+
 /** Suggested download filename: `{courseId} {title} 課程資料 {yyyyMMdd}.pdf`. */
 export function coursePdfFilename(course: Course, generatedAt: Date): string {
   return `${course.courseId} ${course.title} 課程資料 ${formatFileStamp(generatedAt)}.pdf`;
@@ -80,7 +90,7 @@ export function buildCourseDocDefinition(course: Course, generatedAt: Date, user
       // Document identity first — a filed PDF must say what it is before anything else.
       { text: course.title, fontSize: 16, bold: true },
       { text: `${course.courseId} · ${course.prodCourseId}`, color: '#555555', margin: [0, 2, 0, 0] },
-      { text: `產生於 ${formatGeneratedAt(generatedAt)} · ${userName}`, color: '#555555', margin: [0, 2, 0, 8] },
+      { text: formatProvenance(generatedAt, userName), color: '#555555', margin: [0, 2, 0, 8] },
 
       sectionHeading('基本資料'),
       fieldTable([

@@ -79,6 +79,12 @@
     display: none !important;
   }
 
+  /* p-tag renders its `value` as visible label text, so it must give way to the .print-only
+     text twin above — otherwise 允許重聽 prints as "是 是". */
+  p-tag {
+    display: none;
+  }
+
   .card-title {
     break-after: avoid;
   }

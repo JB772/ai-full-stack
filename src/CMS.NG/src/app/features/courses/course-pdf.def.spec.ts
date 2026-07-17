@@ -1,23 +1,40 @@
 import { Course } from './course.model';
-import { buildCourseDocDefinition, coursePdfFilename, formatFileStamp, formatGeneratedAt } from './course-pdf.def';
+import {
+  buildCourseDocDefinition,
+  coursePdfFilename,
+  formatFileStamp,
+  formatGeneratedAt,
+  formatProvenance
+} from './course-pdf.def';
 
+/**
+ * Numeric fields carry deliberately synthetic 6-digit values rather than realistic ones. The
+ * completeness guard below asserts `toContain(String(value))` against the serialized document, so a
+ * fixture value must not occur incidentally. Two ways it can:
+ *   1. Layout literals — the document is full of small integers (`margin: [0, 4, 0, 12]`,
+ *      `pageMargins: [43, ...]`, `fontSize: 13`), so `hour: 12` made `toContain('12')` pass even
+ *      with the 時數 row deleted from the builder.
+ *   2. Each other — `hour: 731` is a substring of `pkid: 90731`, which resurrects the same hole.
+ * Uniform 6-digit values are immune to both: too long to appear in any layout literal, and equal
+ * length means none can be a substring of another. Keep that property when editing.
+ */
 function makeCourse(overrides: Partial<Course> = {}): Course {
   return {
-    pkid: 1,
+    pkid: 700001,
     title: 'Azure 基礎',
     officialTitle: 'Microsoft Azure Fundamentals',
     courseId: 'AZ-900',
     prodCourseId: 'PROD-AZ900',
     friendlyUrl: 'azure-fundamentals',
-    displayOrder: 1,
+    displayOrder: 700002,
     partnerPkid: 1,
     courseGroupPkid: 1,
     publishStatusPkid: 2,
     scheduleOn: '2026-01-01',
     scheduleOff: '2036-01-01',
-    hour: 12,
-    listPrice: 8000,
-    learningCredit: 3.5,
+    hour: 700003,
+    listPrice: 700004,
+    learningCredit: 700005,
     material: '教材X',
     objective: '目標X',
     target: '對象X',
@@ -30,12 +47,12 @@ function makeCourse(overrides: Partial<Course> = {}): Course {
     partner: { pkid: 1, name: 'Microsoft' },
     courseGroup: { pkid: 1, description: '雲端服務' },
     publishStatus: { pkid: 2, description: '已上架' },
-    courseFaqCount: 1,
-    certificationCount: 2,
-    jobCategoryCount: 3,
-    relatedLinkCount: 4,
-    hotCourseCount: 5,
-    recommCount: 6,
+    courseFaqCount: 700006,
+    certificationCount: 700007,
+    jobCategoryCount: 700008,
+    relatedLinkCount: 700009,
+    hotCourseCount: 700010,
+    recommCount: 700011,
     ...overrides
   };
 }
@@ -56,6 +73,19 @@ describe('course-pdf.def', () => {
   describe('產生於 stamp', () => {
     it('formats yyyy-MM-dd HH:mm', () => {
       expect(formatGeneratedAt(GENERATED_AT)).toBe('2026-07-16 14:30');
+    });
+
+    it('zero-pads single-digit hours and minutes', () => {
+      expect(formatGeneratedAt(new Date(2026, 0, 5, 9, 5))).toBe('2026-01-05 09:05');
+      expect(formatGeneratedAt(new Date(2026, 0, 5, 0, 0))).toBe('2026-01-05 00:00');
+    });
+
+    it('attributes the archive to the signed-in admin', () => {
+      expect(formatProvenance(GENERATED_AT, 'admin01')).toBe('產生於 2026-07-16 14:30 · admin01');
+    });
+
+    it('drops the separator when there is no signed-in user to attribute to', () => {
+      expect(formatProvenance(GENERATED_AT, '')).toBe('產生於 2026-07-16 14:30');
     });
   });
 

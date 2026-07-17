@@ -162,9 +162,10 @@
   padding: 1rem 1.25rem;
 }
 
-/* Required for ANY print variant: app.html wraps every guarded route in the sidebar shell,
-   so a chrome-free print output always needs these global rules regardless of which page
-   triggers window.print(). */
+/* A courtesy for anyone who reaches for raw Ctrl+P — nothing in the app calls window.print();
+   存成 PDF generates its archive via pdfmake (see course-pdf.def.ts). app.html wraps every guarded
+   route in the sidebar shell, so stripping the chrome has to happen globally, which means these
+   rules apply to Ctrl+P on every route, not just Course. */
 @media print {
   .sidebar,
   p-toast,

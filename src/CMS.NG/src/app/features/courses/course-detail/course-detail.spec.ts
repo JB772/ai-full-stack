@@ -71,6 +71,10 @@ describe('CourseDetail', () => {
   let router: Router;
   let qrSpy: jasmine.Spy;
 
+  // The signed-in profile seeded by setup() must not outlive this file — AuthService reads it on
+  // construction, so a leak makes any later spec in the same browser context order-dependent.
+  afterEach(() => sessionStorage.clear());
+
   async function setup(course: Course = makeCourse()) {
     sessionStorage.clear();
     signIn();
@@ -181,7 +185,7 @@ describe('CourseDetail', () => {
   });
 
   describe('存成 PDF', () => {
-    it('is disabled until the course loads', async () => {
+    it('is disabled when the course fails to load', async () => {
       await setup();
       service.getByPkid.and.returnValue(throwError(() => new Error('404')));
       spyOn(router, 'navigate');
@@ -212,7 +216,11 @@ describe('CourseDetail', () => {
       expect(pdfService.download).toHaveBeenCalledTimes(2);
     });
 
-    it('toasts and recovers when PDF generation fails', async () => {
+    // Scoped to engine/font-load failure on purpose: pdfmake's `download()` is callback-based and
+    // returns undefined, so CoursePdfService.download() can only ever reject for what it awaits —
+    // the engine load. A throw inside pdfkit itself escapes as an unhandled rejection and cannot
+    // reach this toast. Accepted (see /review 2026-07-16); don't widen this name back out.
+    it('toasts and recovers when the PDF engine fails to load', async () => {
       await setup();
       fixture.detectChanges();
       pdfService.download.and.rejectWith(new Error('font fetch failed'));
@@ -228,7 +236,23 @@ describe('CourseDetail', () => {
 
   describe('completeness (screen view — the PDF twin lives in course-pdf.def.spec.ts)', () => {
     it('renders every substantive field of the Course model', async () => {
+      // Numeric fields get synthetic 6-digit values: the guard below asserts
+      // `toContain(String(value))` against the whole rendered textContent, so a fixture using
+      // 1/2/3 would match incidental digits (dates, the pkid in the QR URL) and pass even with the
+      // field's row deleted from the template. Uniform length also stops one value being a
+      // substring of another. See course-pdf.def.spec.ts for the full rationale.
       const course = makeCourse({
+        pkid: 700001,
+        displayOrder: 700002,
+        hour: 700003,
+        listPrice: 700004,
+        learningCredit: 700005,
+        courseFaqCount: 700006,
+        certificationCount: 700007,
+        jobCategoryCount: 700008,
+        relatedLinkCount: 700009,
+        hotCourseCount: 700010,
+        recommCount: 700011,
         officialTitle: 'Microsoft Azure Fundamentals',
         material: '教材X',
         objective: '目標X',
@@ -254,7 +278,7 @@ describe('CourseDetail', () => {
         if (representedIndirectly.has(key)) {
           continue;
         }
-        expect(text).withContext(`Course.${key} should appear in the print DOM`).toContain(String(course[key]));
+        expect(text).withContext(`Course.${key} should appear in the detail view`).toContain(String(course[key]));
       }
 
       expect(text).toContain(course.partner!.name);
