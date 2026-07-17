@@ -81,6 +81,17 @@
   display: inline-flex;
   gap: 0.35rem;
   font-weight: 700;
+
+  /* The glyphs alone were 16x21px. Pad out to a usable target without
+     changing the row height. */
+  .link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5rem;
+    padding: 0.15rem 0.2rem;
+    line-height: 1;
+  }
 }
 
 .slot-links {

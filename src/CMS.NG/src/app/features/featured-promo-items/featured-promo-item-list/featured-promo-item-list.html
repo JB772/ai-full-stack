@@ -73,8 +73,8 @@
           } @else if (item) {
             <!-- Populated slot -->
             <span class="slot-move">
-              <a class="link" title="往下移" (click)="move(item, 'down')">＋</a>
-              <a class="link" title="往上移" (click)="move(item, 'up')">－</a>
+              <a class="link" title="往下移" aria-label="往下移" (click)="move(item, 'down')">▼</a>
+              <a class="link" title="往上移" aria-label="往上移" (click)="move(item, 'up')">▲</a>
             </span>
             <span class="slot-links">
               <a class="link" (click)="startEdit(day, slot, item)">Edit</a>
