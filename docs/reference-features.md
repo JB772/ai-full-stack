@@ -1,8 +1,8 @@
 # Reference features — what each one demonstrates
 
-The built features double as reference implementations. The table in `CLAUDE.md` (**Adding a feature**)
-maps PK shape → which to copy; this file records the *secondary* patterns each one is the reference for.
-Read the row for the pattern you're about to build.
+The built features double as reference implementations. The table in `docs/architecture.md`
+(**Adding a feature**) maps PK shape → which to copy; this file records the *secondary* patterns each
+one is the reference for. Read the row for the pattern you're about to build.
 
 ## Partner (`smallint` IDENTITY)
 
@@ -36,6 +36,12 @@ separate flex column) or a header (there is none), and the toolbar's opaque `--p
 scrolling fields from showing through. `course-form` does this via a `sticky-toolbar` class on both New and
 Edit (one component serves both). Assert it in a headless Karma run with
 `getComputedStyle(el).position === 'sticky'`.
+
+### PDF export (`course-detail`, 存成 PDF button)
+
+One-click archive download via `pdfmake` + vendored Noto Sans TC — pure docDefinition builder
+(`course-pdf.def.ts`), lazy-loading service (`course-pdf.service.ts`), completeness spec over the
+model's fields. Full pattern: `docs/ui-patterns.md`.
 
 ### QR code (`course-detail`, 基本資料 block)
 

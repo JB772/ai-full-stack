@@ -26,6 +26,24 @@ with `href=dataUrl`, `download={name}.png`, `.click()`). See the QR block in `co
 image + download button in 基本資料). In tests, `qrcode.toDataURL` is overloaded — stub it with
 `spyOn(QRCode, 'toDataURL') as unknown as jasmine.Spy`.
 
+## PDF export (存成 PDF)
+
+One-click PDF download uses **`pdfmake`** with a vendored **Noto Sans TC** font (browsers have no
+silent save-as-PDF API, and PDF generators can't render 繁體中文 without an embedded font). The
+reference is `course-detail`'s 存成 PDF button:
+
+- `course-pdf.def.ts` — a **pure** docDefinition builder (no pdfmake import, no DOM), so
+  completeness/content specs run without the engine. Filename: `{courseId} {title} 課程資料 {yyyyMMdd}.pdf`.
+- `course-pdf.service.ts` — lazy-loads `pdfmake/build/pdfmake` + the OTFs from `public/fonts/`
+  (~13 MB total) on first use and caches the promise per session; the main bundle pays nothing.
+  `pdfmake/build/pdfmake` is in `allowedCommonJsDependencies` (angular.json).
+- Component: `savingPdf` signal drives `[loading]`; failure → error toast. In specs, stub the
+  service (`jasmine.createSpyObj('CoursePdfService', ['download'])`) — never load the real engine.
+- A completeness spec iterates the model's fields against `JSON.stringify(docDefinition)` so a new
+  column can't silently vanish from the archive (`course-pdf.def.spec.ts`).
+- `@media print` rules (in `app.scss` + the component's scss) remain as a Ctrl+P courtesy only —
+  they are not the export path.
+
 ## In-place (inline) list-cell editing
 
 Hand-rolled, **not `pEditableColumn`.** The `course-list` cell editor is a component-managed edit-state

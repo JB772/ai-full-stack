@@ -1,13 +1,25 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter, Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MessageService } from 'primeng/api';
 import { of, throwError } from 'rxjs';
 import QRCode from 'qrcode';
 import { CourseDetail } from './course-detail';
 import { CourseService } from '../course.service';
+import { CoursePdfService } from '../course-pdf.service';
 import { Course } from '../course.model';
 import { RowAuditService } from '../../row-audit/row-audit.service';
+import { AUTH_STORAGE_KEY } from '../../auth/auth.service';
+
+/** Seeds a signed-in session so AuthService (read on construction) exposes it to the page. */
+function signIn(userName = 'admin01'): void {
+  sessionStorage.setItem(
+    AUTH_STORAGE_KEY,
+    JSON.stringify({ userId: 'admin01', userName, accessToken: 'header.payload.sig', roles: ['Admin'] })
+  );
+}
 
 /** A 1x1 transparent PNG — stands in for a real QR render in tests. */
 const FAKE_QR_PNG =
@@ -55,12 +67,24 @@ function makeCourse(overrides: Partial<Course> = {}): Course {
 describe('CourseDetail', () => {
   let fixture: ComponentFixture<CourseDetail>;
   let service: jasmine.SpyObj<CourseService>;
+  let pdfService: jasmine.SpyObj<CoursePdfService>;
   let router: Router;
   let qrSpy: jasmine.Spy;
 
+  // The signed-in profile seeded by setup() must not outlive this file — AuthService reads it on
+  // construction, so a leak makes any later spec in the same browser context order-dependent.
+  afterEach(() => sessionStorage.clear());
+
   async function setup(course: Course = makeCourse()) {
+    sessionStorage.clear();
+    signIn();
+
     service = jasmine.createSpyObj<CourseService>('CourseService', ['getByPkid']);
     service.getByPkid.and.returnValue(of(course));
+
+    // Stub the PDF generator — real pdfmake + an 11 MB font have no place in a unit test.
+    pdfService = jasmine.createSpyObj<CoursePdfService>('CoursePdfService', ['download']);
+    pdfService.download.and.resolveTo();
 
     // Stub the QR renderer so tests don't depend on the real canvas encoder.
     // `toDataURL` is overloaded, so spy on it as a plain jasmine.Spy.
@@ -72,8 +96,11 @@ describe('CourseDetail', () => {
       providers: [
         provideRouter([]),
         provideNoopAnimations(),
+        provideHttpClient(),
+        provideHttpClientTesting(),
         MessageService,
         { provide: CourseService, useValue: service },
+        { provide: CoursePdfService, useValue: pdfService },
         { provide: RowAuditService, useValue: { getForRecord: () => of([]) } },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map([['id', '1']]) } } }
       ]
@@ -110,6 +137,7 @@ describe('CourseDetail', () => {
     const actions = toolbar.querySelector('.page-actions') as HTMLElement;
     expect(actions.textContent).toContain('返回');
     expect(actions.textContent).toContain('編輯');
+    expect(actions.textContent).toContain('存成 PDF');
   });
 
   it('sums the child counts into a reference total', async () => {
@@ -153,6 +181,111 @@ describe('CourseDetail', () => {
     fixture.detectChanges();
 
     expect(navigate).toHaveBeenCalledWith(['/courses']);
+    expect(pdfService.download).not.toHaveBeenCalled();
+  });
+
+  describe('存成 PDF', () => {
+    it('is disabled when the course fails to load', async () => {
+      await setup();
+      service.getByPkid.and.returnValue(throwError(() => new Error('404')));
+      spyOn(router, 'navigate');
+      fixture.detectChanges();
+
+      const pdfButton: HTMLButtonElement =
+        fixture.nativeElement.querySelector('p-button[label="存成 PDF"] button');
+      expect(pdfButton.disabled).toBeTrue();
+    });
+
+    it('downloads the PDF with the course, generation time, and signed-in admin', async () => {
+      const course = makeCourse({ courseId: 'AZ-900', title: 'Azure 基礎' });
+      await setup(course);
+      fixture.detectChanges();
+
+      await api().savePdf();
+
+      expect(pdfService.download).toHaveBeenCalledWith(course, jasmine.any(Date), 'admin01');
+    });
+
+    it('downloads again on a second click (no reload needed)', async () => {
+      await setup();
+      fixture.detectChanges();
+
+      await api().savePdf();
+      await api().savePdf();
+
+      expect(pdfService.download).toHaveBeenCalledTimes(2);
+    });
+
+    // Scoped to engine/font-load failure on purpose: pdfmake's `download()` is callback-based and
+    // returns undefined, so CoursePdfService.download() can only ever reject for what it awaits —
+    // the engine load. A throw inside pdfkit itself escapes as an unhandled rejection and cannot
+    // reach this toast. Accepted (see /review 2026-07-16); don't widen this name back out.
+    it('toasts and recovers when the PDF engine fails to load', async () => {
+      await setup();
+      fixture.detectChanges();
+      pdfService.download.and.rejectWith(new Error('font fetch failed'));
+      const messageService = TestBed.inject(MessageService);
+      const add = spyOn(messageService, 'add');
+
+      await api().savePdf();
+
+      expect(add).toHaveBeenCalledWith(jasmine.objectContaining({ severity: 'error', summary: 'PDF 產生失敗' }));
+      expect(api().savingPdf()).toBeFalse();
+    });
+  });
+
+  describe('completeness (screen view — the PDF twin lives in course-pdf.def.spec.ts)', () => {
+    it('renders every substantive field of the Course model', async () => {
+      // Numeric fields get synthetic 6-digit values: the guard below asserts
+      // `toContain(String(value))` against the whole rendered textContent, so a fixture using
+      // 1/2/3 would match incidental digits (dates, the pkid in the QR URL) and pass even with the
+      // field's row deleted from the template. Uniform length also stops one value being a
+      // substring of another. See course-pdf.def.spec.ts for the full rationale.
+      const course = makeCourse({
+        pkid: 700001,
+        displayOrder: 700002,
+        hour: 700003,
+        listPrice: 700004,
+        learningCredit: 700005,
+        courseFaqCount: 700006,
+        certificationCount: 700007,
+        jobCategoryCount: 700008,
+        relatedLinkCount: 700009,
+        hotCourseCount: 700010,
+        recommCount: 700011,
+        officialTitle: 'Microsoft Azure Fundamentals',
+        material: '教材X',
+        objective: '目標X',
+        target: '對象X',
+        prerequisites: '先備X',
+        outline: '大綱X',
+        towardCertOrExam: '認證X',
+        note: '備註X',
+        otherInfo: '其他X'
+      });
+      await setup(course);
+      fixture.detectChanges();
+
+      const text: string = fixture.nativeElement.textContent;
+
+      // These keys are represented indirectly (nav-object labels, or 是/否 text), not by their
+      // own raw value — checked separately below instead of via the generic loop.
+      const representedIndirectly = new Set<keyof Course>([
+        'partnerPkid', 'courseGroupPkid', 'publishStatusPkid', 'canRepeat', 'partner', 'courseGroup', 'publishStatus'
+      ]);
+
+      for (const key of Object.keys(course) as (keyof Course)[]) {
+        if (representedIndirectly.has(key)) {
+          continue;
+        }
+        expect(text).withContext(`Course.${key} should appear in the detail view`).toContain(String(course[key]));
+      }
+
+      expect(text).toContain(course.partner!.name);
+      expect(text).toContain(course.courseGroup!.description);
+      expect(text).toContain(course.publishStatus!.description);
+      expect(text).toContain('是');
+    });
   });
 
   describe('QR code', () => {

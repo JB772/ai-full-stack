@@ -67,6 +67,20 @@ describe('AppUserList', () => {
     expect(rows.some(r => r.textContent!.includes('guest'))).toBeTrue();
   });
 
+  /**
+   * FE-01 regression guard — see the twin in app-user-detail.spec.ts for the full rationale.
+   * `SYSDATETIME()` writes server LOCAL time and it serialises offset-less; the template used to
+   * append `'Z'`, so DatePipe read it as UTC and shifted the display by the browser's offset (+8h
+   * here). Only distinguishes the two behaviours on a non-UTC runner.
+   */
+  it('renders 密碼更新時間 as local wall-clock, not shifted by the browser timezone', () => {
+    service.query.and.returnValue(of([{ ...users[0], passwordUpdatedTime: '2026-07-16T14:30:00' }]));
+
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('2026-07-16 14:30');
+  });
+
   it('surfaces a load failure without leaving the spinner on', () => {
     service.query.and.returnValue(throwError(() => new Error('boom')));
     const messageService = TestBed.inject(MessageService);

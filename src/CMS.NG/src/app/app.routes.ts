@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './features/auth/auth.guard';
+import { adminGuard } from './features/auth/admin.guard';
 
 export const routes: Routes = [
   {
@@ -12,83 +13,96 @@ export const routes: Routes = [
     path: '',
     canActivateChild: [authGuard],
     children: [
-      { path: '', pathMatch: 'full', redirectTo: 'app-roles' },
+      // Home is 上稿作業, the one item in the「首頁 Home」nav group — the only landing page every account
+      // can actually use. This used to redirect to 'app-roles', so a brand-new non-Admin was dropped onto
+      // the Admin page the sidebar was busy hiding from them.
+      { path: '', pathMatch: 'full', redirectTo: 'featured-promo-items' },
       {
         path: 'profile',
         loadComponent: () => import('./features/auth/profile/profile').then(m => m.Profile),
         title: '我的個人資料 My Profile'
       },
       {
-        path: 'app-roles',
-        loadComponent: () =>
-          import('./features/app-roles/app-role-list/app-role-list').then(m => m.AppRoleList),
-        title: '角色 AppRole'
-      },
-      {
-        path: 'app-roles/new',
-        loadComponent: () =>
-          import('./features/app-roles/app-role-form/app-role-form').then(m => m.AppRoleForm),
-        title: '新增角色'
-      },
-      {
-        path: 'app-roles/:id',
-        loadComponent: () =>
-          import('./features/app-roles/app-role-detail/app-role-detail').then(m => m.AppRoleDetail),
-        title: '檢視角色'
-      },
-      {
-        path: 'app-roles/:id/edit',
-        loadComponent: () =>
-          import('./features/app-roles/app-role-form/app-role-form').then(m => m.AppRoleForm),
-        title: '編輯角色'
-      },
-      {
-        path: 'app-users',
-        loadComponent: () =>
-          import('./features/app-users/app-user-list/app-user-list').then(m => m.AppUserList),
-        title: '使用者 AppUser'
-      },
-      {
-        path: 'app-users/new',
-        loadComponent: () =>
-          import('./features/app-users/app-user-form/app-user-form').then(m => m.AppUserForm),
-        title: '新增使用者'
-      },
-      {
-        path: 'app-users/:id',
-        loadComponent: () =>
-          import('./features/app-users/app-user-detail/app-user-detail').then(m => m.AppUserDetail),
-        title: '檢視使用者'
-      },
-      {
-        path: 'app-users/:id/edit',
-        loadComponent: () =>
-          import('./features/app-users/app-user-form/app-user-form').then(m => m.AppUserForm),
-        title: '編輯使用者'
-      },
-      {
-        path: 'publish-statuses',
-        loadComponent: () =>
-          import('./features/publish-statuses/publish-status-list/publish-status-list').then(m => m.PublishStatusList),
-        title: '發布狀態 PublishStatus'
-      },
-      {
-        path: 'publish-statuses/new',
-        loadComponent: () =>
-          import('./features/publish-statuses/publish-status-form/publish-status-form').then(m => m.PublishStatusForm),
-        title: '新增發布狀態'
-      },
-      {
-        path: 'publish-statuses/:id',
-        loadComponent: () =>
-          import('./features/publish-statuses/publish-status-detail/publish-status-detail').then(m => m.PublishStatusDetail),
-        title: '檢視發布狀態'
-      },
-      {
-        path: 'publish-statuses/:id/edit',
-        loadComponent: () =>
-          import('./features/publish-statuses/publish-status-form/publish-status-form').then(m => m.PublishStatusForm),
-        title: '編輯發布狀態'
+        // The「系統管理 Admin」nav group, guarded as a subtree rather than route-by-route — one place to
+        // read, and no way to add a 13th admin route and forget the guard. Server-side
+        // [Authorize(Roles = "Admin")] is the actual boundary; this only keeps non-Admins off a screen
+        // that would 403 on every request.
+        path: '',
+        canActivateChild: [adminGuard],
+        children: [
+        {
+          path: 'app-roles',
+          loadComponent: () =>
+            import('./features/app-roles/app-role-list/app-role-list').then(m => m.AppRoleList),
+          title: '角色 AppRole'
+        },
+        {
+          path: 'app-roles/new',
+          loadComponent: () =>
+            import('./features/app-roles/app-role-form/app-role-form').then(m => m.AppRoleForm),
+          title: '新增角色'
+        },
+        {
+          path: 'app-roles/:id',
+          loadComponent: () =>
+            import('./features/app-roles/app-role-detail/app-role-detail').then(m => m.AppRoleDetail),
+          title: '檢視角色'
+        },
+        {
+          path: 'app-roles/:id/edit',
+          loadComponent: () =>
+            import('./features/app-roles/app-role-form/app-role-form').then(m => m.AppRoleForm),
+          title: '編輯角色'
+        },
+        {
+          path: 'app-users',
+          loadComponent: () =>
+            import('./features/app-users/app-user-list/app-user-list').then(m => m.AppUserList),
+          title: '使用者 AppUser'
+        },
+        {
+          path: 'app-users/new',
+          loadComponent: () =>
+            import('./features/app-users/app-user-form/app-user-form').then(m => m.AppUserForm),
+          title: '新增使用者'
+        },
+        {
+          path: 'app-users/:id',
+          loadComponent: () =>
+            import('./features/app-users/app-user-detail/app-user-detail').then(m => m.AppUserDetail),
+          title: '檢視使用者'
+        },
+        {
+          path: 'app-users/:id/edit',
+          loadComponent: () =>
+            import('./features/app-users/app-user-form/app-user-form').then(m => m.AppUserForm),
+          title: '編輯使用者'
+        },
+        {
+          path: 'publish-statuses',
+          loadComponent: () =>
+            import('./features/publish-statuses/publish-status-list/publish-status-list').then(m => m.PublishStatusList),
+          title: '發布狀態 PublishStatus'
+        },
+        {
+          path: 'publish-statuses/new',
+          loadComponent: () =>
+            import('./features/publish-statuses/publish-status-form/publish-status-form').then(m => m.PublishStatusForm),
+          title: '新增發布狀態'
+        },
+        {
+          path: 'publish-statuses/:id',
+          loadComponent: () =>
+            import('./features/publish-statuses/publish-status-detail/publish-status-detail').then(m => m.PublishStatusDetail),
+          title: '檢視發布狀態'
+        },
+        {
+          path: 'publish-statuses/:id/edit',
+          loadComponent: () =>
+            import('./features/publish-statuses/publish-status-form/publish-status-form').then(m => m.PublishStatusForm),
+          title: '編輯發布狀態'
+        }
+        ] // ---- end「系統管理 Admin」subtree ----
       },
       {
         path: 'partners',
@@ -170,7 +184,7 @@ export const routes: Routes = [
           ),
         title: '上稿作業 FeaturedPromoItem'
       },
-      { path: '**', redirectTo: 'app-roles' }
+      { path: '**', redirectTo: 'featured-promo-items' }
     ]
   }
 ];

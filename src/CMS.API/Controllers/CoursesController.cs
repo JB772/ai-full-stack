@@ -94,8 +94,19 @@ public class CoursesController(ICourseRepository repository) : ControllerBase
             });
         }
 
-        await repository.DeleteAsync(id);
-        return NoContent();
+        // The pre-check above is the fast path and builds the friendly message. The repository re-checks
+        // inside its own transaction and can still refuse: that means someone added a child row in the
+        // window between the two, which for an ON DELETE CASCADE FK would otherwise be a silent delete.
+        var result = await repository.DeleteAsync(id);
+        return result switch
+        {
+            DeleteResult.NotFound => NotFound(),
+            DeleteResult.Blocked => Conflict(new
+            {
+                message = $"課程「{existing.Title}」剛才已被加入子資料，無法刪除。請重新整理後再試。"
+            }),
+            _ => NoContent()
+        };
     }
 
     /// <summary>Names only the child tables that actually have rows, so the 409 message stays readable.</summary>

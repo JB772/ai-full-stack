@@ -203,10 +203,35 @@ public class InMemoryCourseRepository : ICourseRepository
         return Task.FromResult(true);
     }
 
-    public Task<bool> DeleteAsync(int pkid)
+    /// <summary>
+    /// Test seam for the TOCTOU window. Invoked inside <see cref="DeleteAsync"/> immediately before its
+    /// guard runs — exactly where a concurrent INSERT lands in production: after the controller's
+    /// pre-check has already passed on a different connection, but before the delete transaction reads
+    /// the counts. Mutate the supplied row to simulate that insert.
+    /// </summary>
+    public Action<Course>? OnBeforeDeleteGuard { get; set; }
+
+    public Task<DeleteResult> DeleteAsync(int pkid)
     {
         var course = _courses.SingleOrDefault(c => c.Pkid == pkid);
-        return Task.FromResult(course is not null && _courses.Remove(course));
+        if (course is null)
+        {
+            return Task.FromResult(DeleteResult.NotFound);
+        }
+
+        OnBeforeDeleteGuard?.Invoke(course);
+
+        // Mirrors the real repository's in-transaction re-check. CourseInCertification and
+        // CourseJobCategories are ON DELETE CASCADE in the real schema, so this guard is the only
+        // thing standing between a delete and silent destruction of the junction rows.
+        if (course.CourseFaqCount > 0 || course.CertificationCount > 0 || course.JobCategoryCount > 0
+            || course.RelatedLinkCount > 0 || course.HotCourseCount > 0 || course.RecommCount > 0)
+        {
+            return Task.FromResult(DeleteResult.Blocked);
+        }
+
+        _courses.Remove(course);
+        return Task.FromResult(DeleteResult.Deleted);
     }
 
     private static IEnumerable<Course> Sorted(IEnumerable<Course> courses)

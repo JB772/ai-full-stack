@@ -2,12 +2,12 @@
 - database schema: `.\database\course.sql`
 
 > **Scope note (read `CLAUDE.md`).** `spec/sample1.spec.md` describes a much richer Course than
-> this repo actually implements. The following are **deliberately out of scope** here because no
+> this repo actually implements. **RowAudit** logging, inline **QR code**, and the PDF export have
+> since shipped on the detail page (存成 PDF spec: `spec/course/CoursePDF.md`). The following
+> remain **deliberately out of scope** because no
 > reference implementation for them exists in the codebase, and CLAUDE.md warns against inventing them
 > while scaffolding a table:
-> - **RowAudit** logging (no `RowAuditWriter` / `AuditHelper` exist).
-> - **Copy** action, inline **QR code**, **列印PDF**, and the edit-mode **sub-panels**
->   (`CourseRelatedLink`, `CourseRecomm` inline tables).
+> - **Copy** action and the edit-mode **sub-panels** (`CourseRelatedLink`, `CourseRecomm` inline tables).
 > - **N-N** editors for `CourseInCertification` / `CourseJobCategories`. There is no N-N reference
 >   feature, and no `certifications` / `job-categories` lookup endpoints. The two junctions are still
 >   **counted in the delete guard** (below) so a course that participates in them cannot be silently

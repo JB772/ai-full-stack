@@ -1,12 +1,21 @@
 using CMS.API.Models;
 using CMS.API.Repositories;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CMS.API.Controllers;
 
+/// <summary>
+/// 角色 (AppRole) 維護 —— 全控制器僅限 Admin。
+///
+/// 角色屬於 app.ts 的「系統管理 Admin」導覽群組，該群組本身就是這個應用程式對「哪些頁面只給 Admin」的宣告。
+/// 前端的導覽隱藏只是方便性質，不是防線：未加這個屬性前，任何持有 token 的帳號都能直接呼叫本控制器
+/// (見 docs/auth.md)。此處的伺服器端檢查才是實際的界線。
+/// </summary>
 [ApiController]
 [Route("api/app-roles")]
 [Produces("application/json")]
+[Authorize(Roles = "Admin")]
 public class AppRolesController(IAppRoleRepository repository) : ControllerBase
 {
     /// <summary>取得所有角色。</summary>

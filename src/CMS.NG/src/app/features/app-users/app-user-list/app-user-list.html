@@ -59,7 +59,9 @@
         </td>
         <td>
           @if (user.passwordUpdatedTime) {
-            {{ user.passwordUpdatedTime + 'Z' | date: 'yyyy-MM-dd HH:mm' }}
+            <!-- No 'Z' — see app-user-detail.html. SYSDATETIME() writes local time; treating it as UTC
+                 shifts the display by the browser's offset. -->
+            {{ user.passwordUpdatedTime | date: 'yyyy-MM-dd HH:mm' }}
           } @else {
             <span class="text-muted">—</span>
           }

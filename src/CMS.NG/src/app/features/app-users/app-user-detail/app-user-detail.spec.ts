@@ -75,6 +75,24 @@ describe('AppUserDetail', () => {
     expect(text).toContain('啟用');
   });
 
+  /**
+   * FE-01 regression guard. `PasswordUpdatedTime` is written by `SYSDATETIME()` — server LOCAL time —
+   * and serialises offset-less, so it must be read as local. The template used to append `'Z'`, which
+   * makes DatePipe treat it as UTC and re-render it in the browser's zone: 14:30 shown as 22:30 for
+   * UTC+8. `row-audit-badge.html` renders the same offset-less shape without `'Z'` and is the correct
+   * precedent.
+   *
+   * SCOPE: this only distinguishes the two behaviours when the runner's timezone is NOT UTC — on a UTC
+   * runner local and UTC coincide, so the bug is both invisible and harmless. Runners here are UTC+8.
+   */
+  it('renders 密碼更新時間 as local wall-clock, not shifted by the browser timezone', async () => {
+    await setup();
+    service.getByPkid.and.returnValue(of({ ...admin, passwordUpdatedTime: '2026-07-16T14:30:00' }));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('2026-07-16 14:30');
+  });
+
   it('navigates to the edit page', async () => {
     await setup();
     fixture.detectChanges();
