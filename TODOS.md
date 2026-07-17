@@ -288,3 +288,71 @@ Filed because they were surfaced and left unanswered, not because they are urgen
   machine-local and unreachable from a fresh clone).
 - **Effort:** M (human) → S (CC). **Priority:** P3.
 - **Depends on:** the Course print feature shipping first; a second entity actually needing it.
+
+## P2 — The dev servers run from the `feature-course-pdf` worktree, not the main checkout
+
+- **What:** Both dev processes serve a different tree than `develop`. `ng serve` (:4200) serves
+  `C:/dev/cms/.claude/worktrees/feature-course-pdf/src/CMS.NG`, and `CMS.API.exe` (:5000) runs
+  `…/feature-course-pdf/src/CMS.API/bin/Debug/net9.0/CMS.API.exe`. That worktree is clean at
+  `c65996d`, which is **behind** `develop` (`f1e086f`).
+- **Why it matters:** edits in the main checkout do not hot-reload, so a fix looks like it silently
+  failed, and QA appears to validate code that is not the code under review. It cost real time
+  during the 2026-07-17 /qa run: the ISSUE-001 login fix seemed to do nothing until the serving
+  root was traced.
+- **Why it is not P1 today:** `git diff c65996d f1e086f -- src/` is **empty** — the served code is
+  byte-identical to `develop` under `src/`, and the extra commits on `develop` are docs/chore only
+  (`.gitattributes`, CSO backlog). `84a5389` (the Admin boundary) is present in the served tree.
+  **This is luck, and it expires the moment `develop` touches `src/`.**
+- **How to detect it again:** the Vite `fs.allow` 403 page leaks the served root
+  (`curl http://localhost:4200/@fs/C:/dev/cms/...`); for the API, `Get-CimInstance Win32_Process
+  -Filter "Name='CMS.API.exe'" | Select CommandLine`.
+- **Fix options:** restart both dev servers from `C:/dev/cms`, or retire the merged
+  `feature-course-pdf` worktree (PR #10 is already merged; `git worktree remove` it). Four
+  worktrees are currently registered, three on already-merged or stale branches.
+- **Effort:** S (human) → S (CC). **Priority:** P2.
+
+## P3 — Fixes found by the 2026-07-17 /qa run, not yet applied
+
+- **`ng test` is broken in the main checkout until `npm install`.** `src/CMS.NG/node_modules`
+  predates the PR #10 `pdfmake` merge, so the build dies at
+  `TS2307: Cannot find module 'pdfmake/build/pdfmake'` even though `package.json` declares
+  `pdfmake ^0.2.23`. Karma also needs `CHROME_BIN` (no puppeteer installed; system Chrome at
+  `C:\Program Files\Google\Chrome\Application\chrome.exe` works with `--browsers=ChromeHeadless`).
+  Worth a line in `docs/environment.md` rather than a code change.
+- **Toast overlaps the sticky toolbar.** The 「指派成功」 toast renders over the 取消/儲存 buttons
+  on the AppUser edit page. Cosmetic; buttons are reachable once it fades.
+  Evidence: `.gstack/qa-reports/screenshots/app-user-19-role-assigned.png`.
+- **Inline field errors are not wired to their inputs.** The `.field-error` divs (now including
+  login, `446d893`) carry no `role="alert"` and no `aria-describedby` link to the control, so a
+  screen reader announces nothing on a failed submit. This is the house pattern app-wide, not a
+  login-specific gap — fix it in one pass across `app-role-form`, `course-form`, `profile`, `login`.
+- **Effort:** S (human) → S (CC). **Priority:** P3.
+
+## P2 — The real repository delete guards are verified by nothing
+
+- **What:** `docs/delete-guards.md` specifies 409 on child rows, but the guard living in the real
+  Dapper repository is covered by **no test and no QA**. The stored learning
+  `endpoint-tests-cannot-cover-real-repository-guards` (10/10, proven by negative control on
+  2026-07-17) records that `CmsApiFactory` swaps every `I*Repository` for an in-memory fake, so no
+  endpoint test can execute the real SQL. The 2026-07-17 /qa run declined to exercise it too: the
+  only honest browser test is clicking Delete on live data, and if the guard is broken that
+  destroys production rows.
+- **Why:** this is the largest open coverage gap in the app. Both safety nets have the same blind
+  spot, which is exactly the shape of bug that reaches production.
+- **Fix:** exercise the guards against a disposable dataset — SQLite where the SQL is portable
+  (`docs/schema-and-testing.md`), or a seeded throwaway SQL Server database — not the live DB.
+- **Effort:** M (human) → M (CC). **Priority:** P2.
+
+## P3 — Clean up the QA accounts left in the live database (2026-07-17)
+
+- **What:** the /qa run created three real accounts to verify the role matrix, each with the
+  system default password (`CMS4fun#`): `qa-user@test.local` (pkid 19, User),
+  `qa-browser@test.local` (pkid 20, browser), `qa-admin@test.local` (pkid 21, Admin).
+- **Why:** `qa-admin@test.local` is a **live Admin account with a known default password**. Benign
+  while the app is localhost-only (see the deferral at the top of this file), and it is precisely
+  what re-open trigger 3 is about. Delete them once the role matrix no longer needs re-running.
+- **Also observed (data, not code, so untouched):** `PublishStatus` #2 is literally named
+  `上架中~~` — real tilde characters in the stored data, surfacing in the Course list 上架狀態
+  column and the course form's FK dropdown — and `PublishStatus` #55 is a leftover `test` row
+  (0 courses, 0 promos). The database is the source of truth; both need a data decision, not a fix.
+- **Effort:** S (human) → S (CC). **Priority:** P3.
