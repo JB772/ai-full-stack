@@ -134,7 +134,8 @@
 }
 
 .link {
-  color: var(--p-primary-color);
+  /* primary-700, not primary-color: #10b981 on white is 2.54:1 and fails WCAG AA. */
+  color: var(--p-primary-700);
   cursor: pointer;
   text-decoration: none;
   user-select: none;
